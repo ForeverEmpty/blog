@@ -54,7 +54,7 @@ const {
   >
     <div class="grid gap-(--space-6)">
       <div
-        class="grid grid-cols-[minmax(0,1fr)_minmax(240px,360px)] gap-(--space-4) max-[760px]:grid-cols-1"
+        class="grid grid-cols-[minmax(0,1fr)_minmax(280px,440px)] gap-(--space-4) max-[760px]:grid-cols-1"
       >
         <a
           class="block min-h-14 w-full focus-visible:outline-none"
@@ -76,7 +76,7 @@ const {
 
         <div class="relative isolate grid min-h-42 content-end gap-(--space-3) overflow-hidden">
           <p
-            class="pointer-events-none relative z-20 m-0 pr-(--space-8) text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg"
+            class="pointer-events-none relative z-20 m-0 pr-(--space-12) text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg"
           >
             {{ footerDescription }}
           </p>
@@ -88,13 +88,13 @@ const {
             <Icon
               name="lucide:arrow-up"
               mode="svg"
-              class="h-16 w-16 text-paper pointer-events-none"
+              class="h-20 w-20 text-paper pointer-events-none"
             >
             </Icon>
           </a>
           <p
             aria-hidden="true"
-            class="pointer-events-none absolute inset-x-0 bottom-0 z-20 m-0 pr-(--space-8) text-[22px] leading-[1.55] text-paper text-pretty [clip-path:circle(90px_at_calc(100%-58px)_calc(100%-58px))] max-[520px]:text-lg"
+            class="pointer-events-none absolute inset-x-0 bottom-0 z-20 m-0 pr-(--space-12) text-[22px] leading-[1.55] text-paper text-pretty [clip-path:circle(90px_at_calc(100%-58px)_calc(100%-58px))] max-[520px]:text-lg"
           >
             {{ footerDescription }}
           </p>
