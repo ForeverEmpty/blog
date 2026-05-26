@@ -13,14 +13,14 @@ const { themeMode, themeOptions, indicatorStyle, setThemeMode } = useThemeMode()
       :style="indicatorStyle"
       aria-hidden="true"
     />
-    <button
+    <AppButton
       v-for="option in themeOptions"
       :key="option.mode"
-      class="relative z-10 inline-flex h-9 min-w-10 cursor-pointer items-center justify-center gap-1 rounded-[4px] px-2 text-sm transition-[color,transform] duration-300 ease-[cubic-bezier(.16,1,.3,1)] active:scale-95 focus-visible:outline-none"
+      class="relative z-10"
+      variant="control"
       :class="themeMode === option.mode
         ? 'text-control-active-text'
         : 'text-control-text hover:text-control-hover-text focus-visible:text-control-hover-text'"
-      type="button"
       role="radio"
       :aria-checked="themeMode === option.mode"
       :aria-label="option.title"
@@ -34,6 +34,6 @@ const { themeMode, themeOptions, indicatorStyle, setThemeMode } = useThemeMode()
         :class="themeMode === option.mode ? 'scale-110 -rotate-6' : 'scale-100 rotate-0'"
         aria-hidden="true"
       />
-    </button>
+    </AppButton>
   </div>
 </template>

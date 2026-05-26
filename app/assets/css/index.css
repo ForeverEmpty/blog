@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -18,6 +19,9 @@
   --button-active: color-mix(in oklch, var(--ink), var(--paper) 14%);
   --button-active-text: var(--paper);
   --button-ring: color-mix(in oklch, var(--ink), transparent 64%);
+  --code-surface: color-mix(in oklch, var(--paper), var(--ink) 5%);
+  --code-border: var(--line);
+  --code-text: var(--ink);
   color-scheme: light;
 
   --radius-sm: 6px;
@@ -30,6 +34,7 @@
   --space-8: 64px;
   --space-12: 96px;
 
+  --font-code: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 @theme inline {
@@ -50,11 +55,15 @@
   --color-button-active: var(--button-active);
   --color-button-active-text: var(--button-active-text);
   --color-button-ring: var(--button-ring);
+  --color-code-surface: var(--code-surface);
+  --color-code-border: var(--code-border);
+  --color-code-text: var(--code-text);
 
   --radius-token: var(--radius-sm);
 
   --font-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-code);
 
   --animate-type-rise: typeRise 760ms cubic-bezier(.2, .8, .2, 1) forwards;
 }
@@ -77,6 +86,9 @@ html[data-theme='dark'] {
   --button-active: color-mix(in oklch, var(--ink), var(--paper) 10%);
   --button-active-text: oklch(0.14 0.012 95);
   --button-ring: color-mix(in oklch, var(--ink), transparent 58%);
+  --code-surface: color-mix(in oklch, var(--paper), var(--ink) 7%);
+  --code-border: var(--line);
+  --code-text: var(--ink);
   color-scheme: dark;
 }
 
@@ -99,6 +111,9 @@ html[data-theme='dark'] {
     --button-active: color-mix(in oklch, var(--ink), var(--paper) 10%);
     --button-active-text: oklch(0.14 0.012 95);
     --button-ring: color-mix(in oklch, var(--ink), transparent 58%);
+    --code-surface: color-mix(in oklch, var(--paper), var(--ink) 7%);
+    --code-border: var(--line);
+    --code-text: var(--ink);
     color-scheme: dark;
   }
 }
@@ -128,6 +143,51 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-code);
+}
+
+.shiki,
+.shiki span {
+  background-color: var(--code-surface) !important;
+  color: var(--shiki-light, var(--shiki-default, var(--code-text))) !important;
+  font-style: var(--shiki-light-font-style, var(--shiki-default-font-style)) !important;
+  font-weight: var(--shiki-light-font-weight, var(--shiki-default-font-weight)) !important;
+  text-decoration: var(--shiki-light-text-decoration, var(--shiki-default-text-decoration)) !important;
+}
+
+html[data-theme='light'] .shiki,
+html[data-theme='light'] .shiki span {
+  background-color: var(--code-surface) !important;
+  color: var(--shiki-light, var(--shiki-default, var(--code-text))) !important;
+  font-style: var(--shiki-light-font-style, var(--shiki-default-font-style)) !important;
+  font-weight: var(--shiki-light-font-weight, var(--shiki-default-font-weight)) !important;
+  text-decoration: var(--shiki-light-text-decoration, var(--shiki-default-text-decoration)) !important;
+}
+
+html[data-theme='dark'] .shiki,
+html[data-theme='dark'] .shiki span {
+  background-color: var(--code-surface) !important;
+  color: var(--shiki-dark, var(--shiki-default, var(--code-text))) !important;
+  font-style: var(--shiki-dark-font-style, var(--shiki-default-font-style)) !important;
+  font-weight: var(--shiki-dark-font-weight, var(--shiki-default-font-weight)) !important;
+  text-decoration: var(--shiki-dark-text-decoration, var(--shiki-default-text-decoration)) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme='light']) .shiki,
+  html:not([data-theme='light']) .shiki span {
+    background-color: var(--code-surface) !important;
+    color: var(--shiki-dark, var(--shiki-default, var(--code-text))) !important;
+    font-style: var(--shiki-dark-font-style, var(--shiki-default-font-style)) !important;
+    font-weight: var(--shiki-dark-font-weight, var(--shiki-default-font-weight)) !important;
+    text-decoration: var(--shiki-dark-text-decoration, var(--shiki-default-text-decoration)) !important;
+  }
 }
 
 html.theme-is-transitioning,

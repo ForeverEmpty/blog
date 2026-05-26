@@ -1,23 +1,15 @@
 <script setup lang="ts">
-const footerLinks = [
-  { label: "首页", href: "#" },
-  { label: "归档", href: "#" },
-  { label: "专题", href: "#" },
-  { label: "关于", href: "#" },
-];
-
-const footerDescription =
-  "一个面向写作、思考与发布的 Nuxt 4 博客。页面以文字为主角，让后台和内容系统逐步接入。";
+const appConfig = useAppConfig();
 const currentYear = new Date().getFullYear();
 const footerRoot = ref<HTMLElement | null>(null);
 const brandCanvas = ref<HTMLCanvasElement | null>(null);
-const brandText = "ChankoBlog";
+const brandText = computed(() => appConfig.site.name);
 
 // Canvas 字标动画参数集中放在这里，后续调范围、分块和速度不需要读绘制循环。
 const motionConfig = {
   // 横向影响范围：max(min, min(canvas width * ratio, max))。
-  rangeMinX: 140,
-  rangeRatioX: 0.5,
+  rangeMinX: 100,
+  rangeRatioX: 0.3,
   rangeMaxX: 560,
   // 纵向影响范围：max(min, min(canvas height * ratio, max))。
   rangeMinY: 80,
@@ -25,13 +17,13 @@ const motionConfig = {
   rangeMaxY: 180,
   // 分块尺寸。越大越干净、性能越稳；越小越细腻但更容易脏。
   tileWidth: 34,
-  tileHeight: 26,
+  tileHeight: 28,
   // 鼠标横向速度到像素位移的倍率。
-  speedMultiplier: 40,
+  speedMultiplier: 60,
   // 单个方块左右位移上限。
-  maxShift: 60,
+  maxShift: 80,
   // 细笔画/边缘方块的最低位移权重。
-  minInkWeight: 0.55,
+  minInkWeight: 0.65,
 };
 
 const {
@@ -41,7 +33,7 @@ const {
 } = useCanvasWordmarkMotion({
   canvas: brandCanvas,
   root: footerRoot,
-  text: brandText,
+  text: brandText.value,
   config: motionConfig,
 });
 </script>
@@ -59,7 +51,7 @@ const {
         <a
           class="block min-h-14 w-full focus-visible:outline-none"
           href="#"
-          aria-label="回到 ChankoBlog 首页顶部"
+          :aria-label="appConfig.footer.homeAriaLabel"
           @pointerenter="updateBrandMotion"
           @pointermove="updateBrandMotion"
           @pointerleave="clearBrandMotion"
@@ -78,12 +70,12 @@ const {
           <p
             class="pointer-events-none relative z-20 m-0 pr-(--space-12) text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg"
           >
-            {{ footerDescription }}
+            {{ appConfig.footer.description }}
           </p>
           <a
             class="absolute -right-8 -bottom-8 z-10 flex h-45 w-45 -rotate-45 items-center justify-center rounded-full bg-ink transition-transform duration-300 ease-[cubic-bezier(.16,1,.3,1)] hover:rotate-0 focus-visible:rotate-0 focus-visible:outline-none"
             href="#"
-            aria-label="回到 ChankoBlog 首页顶部"
+            :aria-label="appConfig.footer.homeAriaLabel"
           >
             <Icon
               name="lucide:arrow-up"
@@ -96,7 +88,7 @@ const {
             aria-hidden="true"
             class="pointer-events-none absolute inset-x-0 bottom-0 z-20 m-0 pr-(--space-12) text-[22px] leading-[1.55] text-paper text-pretty [clip-path:circle(90px_at_calc(100%-58px)_calc(100%-58px))] max-[520px]:text-lg"
           >
-            {{ footerDescription }}
+            {{ appConfig.footer.description }}
           </p>
         </div>
       </div>
@@ -109,7 +101,7 @@ const {
           aria-label="页脚导航"
         >
           <a
-            v-for="link in footerLinks"
+            v-for="link in appConfig.footer.links"
             :key="link.label"
             class="inline-flex min-h-11 items-center rounded-token px-(--space-2) transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
             :href="link.href"
@@ -118,7 +110,7 @@ const {
           </a>
         </nav>
 
-        <p class="m-0 text-sm text-quiet">© {{ currentYear }} ChankoBlog</p>
+        <p class="m-0 text-sm text-quiet">© {{ currentYear }} {{ appConfig.site.name }}</p>
       </div>
     </div>
   </footer>

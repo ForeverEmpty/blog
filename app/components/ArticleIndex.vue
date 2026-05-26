@@ -45,11 +45,11 @@ defineProps<{
           <span class="relative z-1 font-display text-[28px] text-quiet transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
             0{{ index + 1 }}
           </span>
-          <div class="relative z-1">
+          <div class="relative z-1 min-w-0">
             <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
               {{ state }}
             </p>
-            <h3 class="mt-(--space-1) mb-0 font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]">
+            <h3 class="mt-(--space-1) mb-0 truncate font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]">
               真实文章待接入
             </h3>
           </div>
