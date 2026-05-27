@@ -6,6 +6,19 @@ const appConfig = useAppConfig();
 const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
   default: () => fallbackDailyQuote,
 });
+
+const { data: articles } = await useAsyncData("home-blog-list", () =>
+  queryCollection("blog")
+    .where("published", "=", true)
+    .order("date", "DESC")
+    .limit(3)
+    .all(),
+  {
+    default: () => [],
+  },
+);
+
+const projects = computed(() => (appConfig.projects.items ?? []).slice(0, 3));
 </script>
 
 <template>
@@ -35,7 +48,16 @@ const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
 
     <ArticleIndex
       :words="appConfig.home.articleIndex.words"
-      :states="appConfig.home.articleIndex.states"
+      :title="appConfig.home.articleIndex.title"
+      :description="appConfig.home.articleIndex.description"
+      :articles="articles"
+    />
+
+    <ProjectIndex
+      :words="appConfig.home.projectIndex.words"
+      :title="appConfig.home.projectIndex.title"
+      :description="appConfig.home.projectIndex.description"
+      :projects="projects"
     />
   </NuxtLayout>
 </template>

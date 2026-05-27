@@ -66,7 +66,9 @@ const {
           <span class="sr-only">{{ brandText }}</span>
         </a>
 
-        <div class="relative isolate grid min-h-42 content-end gap-(--space-3) overflow-hidden">
+        <div
+          class="relative isolate grid min-h-42 content-end gap-(--space-3) overflow-hidden"
+        >
           <p
             class="pointer-events-none relative z-20 m-0 pr-(--space-12) text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg"
           >
@@ -100,17 +102,20 @@ const {
           class="flex flex-wrap gap-(--space-2) text-sm text-muted"
           aria-label="页脚导航"
         >
-          <a
+          <AppLinkButton
             v-for="link in appConfig.footer.links"
             :key="link.label"
-            class="inline-flex min-h-11 items-center rounded-token px-(--space-2) transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
+            variant="text"
+            class="font-normal"
             :href="link.href"
           >
             {{ link.label }}
-          </a>
+          </AppLinkButton>
         </nav>
 
-        <p class="m-0 text-sm text-quiet">© {{ currentYear }} {{ appConfig.site.name }}</p>
+        <p class="m-0 text-sm text-quiet">
+          © {{ currentYear }} {{ appConfig.site.name }}
+        </p>
       </div>
     </div>
   </footer>

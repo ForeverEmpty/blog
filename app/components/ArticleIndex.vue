@@ -1,7 +1,16 @@
 <script setup lang="ts">
 defineProps<{
   words: string[]
-  states: string[]
+  title: string
+  description: string
+  articles?: {
+    path: string
+    title: string
+    description: string
+    date: string
+    category?: string
+    tags: string[]
+  }[]
 }>()
 </script>
 
@@ -32,26 +41,59 @@ defineProps<{
           id="index-title"
           class="m-0 font-display text-[88px] font-normal leading-[0.95] tracking-normal text-pretty max-[1100px]:text-[64px] max-[520px]:text-[40px]"
         >
-          最新文章区会在这里接入真实内容。
+          {{ title }}
         </h2>
+        <p class="m-0 max-w-180 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
+          {{ description }}
+        </p>
       </div>
 
-      <div class="grid border-t border-line px-(--space-2)" aria-label="文章列表待接入状态">
+      <div
+        v-if="articles && articles.length > 0"
+        class="grid border-t border-line px-(--space-2)"
+        aria-label="最新文章列表"
+      >
         <article
-          v-for="(state, index) in states"
-          :key="state"
+          v-for="(article, index) in articles"
+          :key="article.path"
           class="group relative grid min-h-38 grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-(--space-4) overflow-hidden border-b border-line px-(--space-2) py-(--space-4) text-ink before:absolute before:inset-0 before:z-0 before:origin-left before:scale-x-0 before:bg-ink before:transition-transform before:duration-420 before:ease-[cubic-bezier(.2,.8,.2,1)] hover:text-paper hover:before:scale-x-100 focus-within:text-paper focus-within:before:scale-x-100 max-[760px]:min-h-34 max-[760px]:grid-cols-[48px_minmax(0,1fr)] max-[760px]:gap-(--space-2)"
         >
           <span class="relative z-1 font-display text-[28px] text-quiet transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
             0{{ index + 1 }}
           </span>
-          <div class="relative z-1 min-w-0">
-            <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-              {{ state }}
-            </p>
-            <h3 class="mt-(--space-1) mb-0 truncate font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]">
-              真实文章待接入
+          <div class="relative z-1 grid min-w-0 gap-(--space-1)">
+            <div class="flex flex-wrap items-center gap-x-(--space-2) gap-y-(--space-1)">
+              <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
+                {{ article.date }}
+              </p>
+              <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
+                {{ article.category || '未分类' }}
+              </p>
+            </div>
+            <h3 class="m-0 truncate font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]">
+              <NuxtLink
+                class="block truncate focus-visible:outline-none"
+                :href="article.path"
+              >
+                {{ article.title }}
+              </NuxtLink>
             </h3>
+            <p class="m-0 line-clamp-3 max-w-180 text-lg leading-[1.55] text-muted text-pretty transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
+              {{ article.description }}
+            </p>
+            <ul
+              v-if="article.tags.length > 0"
+              class="m-0 flex list-none flex-wrap gap-(--space-1) p-0"
+              aria-label="文章标签"
+            >
+              <li
+                v-for="tag in article.tags.slice(0, 3)"
+                :key="tag"
+                class="border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
+              >
+                {{ tag }}
+              </li>
+            </ul>
           </div>
           <span
             class="relative z-1 translate-x-4 text-sm text-quiet opacity-0 transition-[opacity,transform,color] duration-200 group-hover:translate-x-0 group-hover:text-paper group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:text-paper group-focus-within:opacity-100 max-[760px]:hidden"
@@ -60,6 +102,18 @@ defineProps<{
             Read
           </span>
         </article>
+      </div>
+
+      <div
+        v-else
+        class="grid border-t border-line px-(--space-2)"
+        aria-label="最新文章空状态"
+      >
+        <div class="grid min-h-38 items-center border-b border-line py-(--space-4)">
+          <p class="m-0 max-w-170 text-lg leading-[1.6] text-muted text-pretty">
+            暂无已发布文章。
+          </p>
+        </div>
       </div>
     </div>
   </section>

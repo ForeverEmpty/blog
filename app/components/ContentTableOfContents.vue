@@ -18,6 +18,8 @@ const props = withDefaults(
 
 const activeId = ref('')
 let updateFrame = 0
+const detectionTopRatio = 0.3
+const detectionBottomRatio = 0.56
 
 const flatLinks = computed(() => props.links)
 const hasLinks = computed(() => flatLinks.value.length > 0)
@@ -40,23 +42,26 @@ const setActiveHeading = () => {
     return
   }
 
-  const viewportHeight = window.innerHeight
-  let lastVisible: HTMLElement | undefined
-  let lastAboveViewport: HTMLElement | undefined
+  const detectionTop = window.innerHeight * detectionTopRatio
+  const detectionBottom = window.innerHeight * detectionBottomRatio
+  let topHeadingInDetectionArea: HTMLElement | undefined
+  let lastAboveDetectionArea: HTMLElement | undefined
 
   for (const heading of headings) {
     const rect = heading.getBoundingClientRect()
 
-    if (rect.top < viewportHeight && rect.bottom > 0) {
-      lastVisible = heading
+    if (rect.top >= detectionTop && rect.top <= detectionBottom) {
+      if (!topHeadingInDetectionArea || rect.top < topHeadingInDetectionArea.getBoundingClientRect().top) {
+        topHeadingInDetectionArea = heading
+      }
     }
 
-    if (rect.top <= 0) {
-      lastAboveViewport = heading
+    if (rect.top < detectionTop) {
+      lastAboveDetectionArea = heading
     }
   }
 
-  activeId.value = (lastVisible ?? lastAboveViewport ?? headings[0]).id
+  activeId.value = (topHeadingInDetectionArea ?? lastAboveDetectionArea ?? headings[0]).id
 }
 
 const requestActiveHeadingUpdate = () => {

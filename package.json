@@ -13,6 +13,7 @@
     "@nuxt/content": "3.14.0",
     "@nuxt/image": "2.0.0",
     "@pinia/nuxt": "^0.11.3",
+    "@types/node": "^25.9.1",
     "better-sqlite3": "^12.10.0",
     "nuxt": "^4.4.6",
     "vue": "^3.5.34",

@@ -3,6 +3,8 @@ defineProps<{
   date: string
   author: string
   authorUrl?: string
+  category?: string
+  tags?: string[]
   wordCount: number
   readingMinutes: number
   views?: number
@@ -59,6 +61,29 @@ const formatCount = (value: number) => value.toLocaleString('zh-CN')
               {{ author }}
             </a>
             <span v-else>{{ author }}</span>
+          </dd>
+        </div>
+
+        <div class="grid gap-1 border-b border-line py-(--space-2) max-[760px]:pr-(--space-2)">
+          <dt class="text-[12px] font-bold uppercase tracking-normal text-quiet">Category</dt>
+          <dd class="m-0 text-base font-bold leading-tight text-ink break-words">
+            {{ category || '未分类' }}
+          </dd>
+        </div>
+
+        <div class="grid gap-2 border-b border-line py-(--space-2) max-[760px]:col-span-2">
+          <dt class="text-[12px] font-bold uppercase tracking-normal text-quiet">Tags</dt>
+          <dd v-if="tags && tags.length > 0" class="m-0 flex flex-wrap gap-(--space-1)">
+            <span
+              v-for="tag in tags"
+              :key="tag"
+              class="border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-ink"
+            >
+              {{ tag }}
+            </span>
+          </dd>
+          <dd v-else class="m-0 text-base font-bold leading-tight text-ink">
+            未标记
           </dd>
         </div>
       </dl>

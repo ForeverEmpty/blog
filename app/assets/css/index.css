@@ -22,6 +22,18 @@
   --code-surface: color-mix(in oklch, var(--paper), var(--ink) 5%);
   --code-border: var(--line);
   --code-text: var(--ink);
+  --callout-success-accent: oklch(0.50 0.15 145);
+  --callout-success-surface: oklch(0.94 0.06 145);
+  --callout-success-border: oklch(0.62 0.13 145);
+  --callout-success-text: var(--ink);
+  --callout-warning-accent: oklch(0.58 0.16 82);
+  --callout-warning-surface: oklch(0.93 0.09 86);
+  --callout-warning-border: oklch(0.68 0.15 82);
+  --callout-warning-text: var(--ink);
+  --callout-danger-accent: oklch(0.54 0.19 28);
+  --callout-danger-surface: oklch(0.93 0.07 28);
+  --callout-danger-border: oklch(0.62 0.16 28);
+  --callout-danger-text: var(--ink);
   color-scheme: light;
 
   --radius-sm: 6px;
@@ -58,6 +70,18 @@
   --color-code-surface: var(--code-surface);
   --color-code-border: var(--code-border);
   --color-code-text: var(--code-text);
+  --color-callout-success-accent: var(--callout-success-accent);
+  --color-callout-success-surface: var(--callout-success-surface);
+  --color-callout-success-border: var(--callout-success-border);
+  --color-callout-success-text: var(--callout-success-text);
+  --color-callout-warning-accent: var(--callout-warning-accent);
+  --color-callout-warning-surface: var(--callout-warning-surface);
+  --color-callout-warning-border: var(--callout-warning-border);
+  --color-callout-warning-text: var(--callout-warning-text);
+  --color-callout-danger-accent: var(--callout-danger-accent);
+  --color-callout-danger-surface: var(--callout-danger-surface);
+  --color-callout-danger-border: var(--callout-danger-border);
+  --color-callout-danger-text: var(--callout-danger-text);
 
   --radius-token: var(--radius-sm);
 
@@ -89,6 +113,18 @@ html[data-theme='dark'] {
   --code-surface: color-mix(in oklch, var(--paper), var(--ink) 7%);
   --code-border: var(--line);
   --code-text: var(--ink);
+  --callout-success-accent: oklch(0.76 0.10 145);
+  --callout-success-surface: oklch(0.24 0.035 145);
+  --callout-success-border: oklch(0.42 0.075 145);
+  --callout-success-text: var(--ink);
+  --callout-warning-accent: oklch(0.78 0.10 86);
+  --callout-warning-surface: oklch(0.25 0.035 86);
+  --callout-warning-border: oklch(0.44 0.075 86);
+  --callout-warning-text: var(--ink);
+  --callout-danger-accent: oklch(0.76 0.11 28);
+  --callout-danger-surface: oklch(0.24 0.035 28);
+  --callout-danger-border: oklch(0.42 0.08 28);
+  --callout-danger-text: var(--ink);
   color-scheme: dark;
 }
 
@@ -114,6 +150,18 @@ html[data-theme='dark'] {
     --code-surface: color-mix(in oklch, var(--paper), var(--ink) 7%);
     --code-border: var(--line);
     --code-text: var(--ink);
+    --callout-success-accent: oklch(0.76 0.10 145);
+    --callout-success-surface: oklch(0.24 0.035 145);
+    --callout-success-border: oklch(0.42 0.075 145);
+    --callout-success-text: var(--ink);
+    --callout-warning-accent: oklch(0.78 0.10 86);
+    --callout-warning-surface: oklch(0.25 0.035 86);
+    --callout-warning-border: oklch(0.44 0.075 86);
+    --callout-warning-text: var(--ink);
+    --callout-danger-accent: oklch(0.76 0.11 28);
+    --callout-danger-surface: oklch(0.24 0.035 28);
+    --callout-danger-border: oklch(0.42 0.08 28);
+    --callout-danger-text: var(--ink);
     color-scheme: dark;
   }
 }

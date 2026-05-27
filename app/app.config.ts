@@ -22,21 +22,29 @@ export default defineAppConfig({
     eyebrow: 'No Longer Expecting / No Longer Relying',
     title: 'ChankoBlog',
     structureLink: {
-      label: '查看首页结构',
+      label: '查看文章',
       href: '#writing-index'
     },
     articleIndex: {
       words: ['写作', '思考', '记录', '发布'],
+      title: '最新文章区会在这里接入真实内容。',
+      description: '从这里开始，你可以查看最新发布的文章。',
       states: [
         '接入文章接口后显示最新发布',
         '接入后台后显示精选文章',
         '接入标签后显示阅读路径'
       ]
+    },
+    projectIndex: {
+      words: ['项目', '工具', '部署', '源码'],
+      title: '公开项目区会在这里接入真实作品。',
+      description: '从首页直接进入已经部署的工具和源码仓库，项目详情页保留完整列表、状态与分页。'
     }
   },
   blogList: {
     eyebrow: 'Writing Index',
     title: '文章目录',
+    pageSize: 5,
     description: '所有已发布文章会在这里按时间整理。当前后台内容接口尚未接入，因此页面先呈现真实的空状态与列表框架。',
     emptyKicker: 'Content API Pending',
     emptyTitle: '还没有可展示的文章。',
@@ -51,6 +59,13 @@ export default defineAppConfig({
       label: '返回首页',
       href: '/'
     }
+  },
+  aiSummary: {
+    enabled: true,
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-5.5',
+    temperature: 0.2,
+    maxTokens: 700
   },
   archive: {
     eyebrow: 'Archive',
@@ -73,7 +88,8 @@ export default defineAppConfig({
   projects: {
     eyebrow: 'Projects',
     title: '项目',
-    description: '这里用于展示博客相关工具、实验页面和公开项目。当前项目数据尚未接入，因此先呈现可扩展的项目索引结构。',
+    pageSize: 4,
+    description: '这里用于展示博客相关工具、实验页面和公开项目。项目条目会链接到源码、部署页面和当前状态。',
     emptyKicker: 'Project API Pending',
     emptyTitle: '还没有公开项目。',
     emptyDescription: '接入项目数据后，这里会展示项目名称、状态、链接和说明；在此之前不编造仓库、进度或上线地址。',
@@ -86,7 +102,18 @@ export default defineAppConfig({
     primaryAction: {
       label: '返回文章目录',
       href: '/blog'
-    }
+    },
+    items: [
+      {
+        name: 'Tomodoro',
+        description: '一个独立部署的专注计时项目，提供源码仓库和线上访问入口。',
+        status: '已部署',
+        category: '工具',
+        sourceUrl: 'https://github.com/ForeverEmpty/Tomodoro',
+        launchUrl: 'https://foreverempty.github.io/Tomodoro/#/',
+        tags: ['GitHub Pages', 'Timer', 'Productivity']
+      }
+    ]
   },
   footer: {
     description: '一个面向写作、思考与发布的 Nuxt 4 博客。页面以文字为主角，让后台和内容系统逐步接入。',

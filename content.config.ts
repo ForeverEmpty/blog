@@ -11,6 +11,7 @@ export default defineContentConfig({
         date: z.string(),
         author: z.string(),
         authorUrl: z.string().optional(),
+        category: z.string().default('未分类'),
         views: z.number().int().nonnegative().optional(),
         published: z.boolean().default(true),
         tags: z.array(z.string()).default([])

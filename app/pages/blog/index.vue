@@ -1,5 +1,7 @@
 <script setup lang="ts">
 const appConfig = useAppConfig();
+const route = useRoute();
+const router = useRouter();
 
 const { data: articles } = await useAsyncData("blog-list", () =>
   queryCollection("blog")
@@ -12,6 +14,30 @@ const { data: articles } = await useAsyncData("blog-list", () =>
 );
 
 const articleCount = computed(() => articles.value.length);
+const pageSize = computed(() => appConfig.blogList.pageSize);
+const requestedPage = computed(() => {
+  const page = Number.parseInt(String(route.query.page || "1"), 10);
+
+  return Number.isFinite(page) ? page : 1;
+});
+const pageCount = computed(() => Math.max(1, Math.ceil(articleCount.value / pageSize.value)));
+const currentPage = computed(() => Math.min(Math.max(1, requestedPage.value), pageCount.value));
+const paginatedArticles = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+
+  return articles.value.slice(start, start + pageSize.value);
+});
+const setPage = async (page: number) => {
+  const nextQuery = { ...route.query };
+
+  if (page <= 1) {
+    delete nextQuery.page;
+  } else {
+    nextQuery.page = String(page);
+  }
+
+  await router.push({ query: nextQuery });
+};
 
 useHead({
   title: `${appConfig.blogList.title} - ${appConfig.site.name}`,
@@ -52,43 +78,22 @@ useHead({
             </p>
           </div>
 
-          <div
+          <ArticleList
             v-if="articles.length > 0"
-            class="grid border-t border-line px-(--space-2)"
-            aria-label="文章列表"
-          >
-            <article
-              v-for="(article, index) in articles"
-              :key="article.path"
-              class="group relative grid min-h-42 grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-(--space-4) overflow-hidden border-b border-line px-(--space-2) py-(--space-4) text-ink before:absolute before:inset-0 before:z-0 before:origin-left before:scale-x-0 before:bg-ink before:transition-transform before:duration-420 before:ease-[cubic-bezier(.2,.8,.2,1)] hover:text-paper hover:before:scale-x-100 focus-within:text-paper focus-within:before:scale-x-100 max-[760px]:min-h-34 max-[760px]:grid-cols-[48px_minmax(0,1fr)] max-[760px]:gap-(--space-2)"
-            >
-              <span class="relative z-1 font-display text-[28px] text-quiet transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-                {{ String(index + 1).padStart(2, "0") }}
-              </span>
-              <div class="relative z-1 grid min-w-0 gap-(--space-1)">
-                <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-                  {{ article.date }}
-                </p>
-                <h2 class="m-0 min-w-0 truncate font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]">
-                  <NuxtLink
-                    class="block truncate focus-visible:outline-none"
-                    :href="article.path"
-                  >
-                    {{ article.title }}
-                  </NuxtLink>
-                </h2>
-                <p class="m-0 line-clamp-3 max-w-180 text-lg leading-[1.55] text-muted text-pretty transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-                  {{ article.description }}
-                </p>
-              </div>
-              <span
-                class="relative z-1 translate-x-4 text-sm text-quiet opacity-0 transition-[opacity,transform,color] duration-200 group-hover:translate-x-0 group-hover:text-paper group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:text-paper group-focus-within:opacity-100 max-[760px]:hidden"
-                aria-hidden="true"
-              >
-                Read
-              </span>
-            </article>
-          </div>
+            :articles="paginatedArticles"
+            label="文章列表"
+            :start-index="(currentPage - 1) * pageSize"
+          />
+
+          <AppPagination
+            v-if="articles.length > 0"
+            :page="currentPage"
+            :page-count="pageCount"
+            :total="articleCount"
+            :page-size="pageSize"
+            label="文章分页"
+            @change="setPage"
+          />
 
           <div v-else class="grid border-t border-line" aria-label="文章列表空状态">
             <div
