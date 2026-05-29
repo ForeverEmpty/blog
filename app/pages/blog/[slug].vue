@@ -10,6 +10,7 @@ const { data: article } = await useAsyncData(`blog-${slug.value}`, () =>
 const { data: articleSiblings } = await useAsyncData("blog-siblings", () =>
   queryCollection("blog")
     .where("published", "=", true)
+    .where("locked", "=", false)
     .order("date", "DESC")
     .all(),
   {
@@ -21,6 +22,13 @@ if (!article.value) {
   throw createError({
     statusCode: 404,
     statusMessage: "Article Not Found",
+  });
+}
+
+if (article.value.locked) {
+  throw createError({
+    statusCode: 403,
+    statusMessage: "Article Locked",
   });
 }
 
@@ -333,6 +341,8 @@ onBeforeUnmount(() => {
           <ArticleAiSummary :slug="slug" />
 
           <ContentBody :value="articleRenderValue" />
+
+          <ArticleComments :slug="slug" />
 
           <nav
             class="grid max-w-190 grid-cols-2 border-y border-line"

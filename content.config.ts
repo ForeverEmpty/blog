@@ -14,6 +14,7 @@ export default defineContentConfig({
         category: z.string().default('未分类'),
         views: z.number().int().nonnegative().optional(),
         published: z.boolean().default(true),
+        locked: z.boolean().default(false),
         tags: z.array(z.string()).default([])
       })
     }),

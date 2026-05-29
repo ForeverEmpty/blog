@@ -67,7 +67,7 @@ const heading = computed(() => props.title || variantConfig.value.label)
 
 <template>
   <aside
-    class="my-(--space-4) grid gap-(--space-2) border p-(--space-3) text-[16px] leading-[1.75] [&_a]:underline [&_a]:underline-offset-4 [&_ol]:my-(--space-2) [&_ol]:pl-(--space-3) [&_p]:m-0 [&_p+p]:mt-(--space-2) [&_ul]:my-(--space-2) [&_ul]:pl-(--space-3)"
+    class="my-(--space-4) grid gap-(--space-2) border p-(--space-3) text-[16px] leading-[1.75] [&_a]:underline [&_a]:underline-offset-4 [&_ol]:my-(--space-2) [&_ol]:list-decimal [&_ol]:pl-(--space-3) [&_p]:m-0 [&_p+p]:mt-(--space-2) [&_ul]:my-(--space-2) [&_ul]:list-disc [&_ul]:pl-(--space-3)"
     :class="variantConfig.rootClass"
   >
     <div class="flex items-center gap-(--space-2)">

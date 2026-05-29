@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const appConfig = useAppConfig();
 const currentYear = new Date().getFullYear();
+const { isActiveNavigation } = useActiveNavigation();
 const footerRoot = ref<HTMLElement | null>(null);
 const brandCanvas = ref<HTMLCanvasElement | null>(null);
 const brandText = computed(() => appConfig.site.name);
@@ -108,6 +109,7 @@ const {
             variant="text"
             class="font-normal"
             :href="link.href"
+            :active="isActiveNavigation(link.href)"
           >
             {{ link.label }}
           </AppLinkButton>

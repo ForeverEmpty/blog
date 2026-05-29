@@ -46,7 +46,7 @@ const formatCount = (value: number) => value.toLocaleString('zh-CN')
         <div class="grid gap-1 border-b border-line py-(--space-2) max-[760px]:pr-(--space-2)">
           <dt class="text-[12px] font-bold uppercase tracking-normal text-quiet">Views</dt>
           <dd class="m-0 font-display text-[32px] leading-none text-ink">
-            {{ typeof views === 'number' ? formatCount(views) : '未接入' }}
+            {{ typeof views === 'number' ? formatCount(views) : '—' }}
           </dd>
         </div>
 

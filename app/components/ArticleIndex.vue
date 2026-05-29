@@ -111,7 +111,7 @@ defineProps<{
       >
         <div class="grid min-h-38 items-center border-b border-line py-(--space-4)">
           <p class="m-0 max-w-170 text-lg leading-[1.6] text-muted text-pretty">
-            暂无已发布文章。
+            文章正在整理中。
           </p>
         </div>
       </div>

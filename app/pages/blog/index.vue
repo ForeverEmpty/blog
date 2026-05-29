@@ -6,6 +6,7 @@ const router = useRouter();
 const { data: articles } = await useAsyncData("blog-list", () =>
   queryCollection("blog")
     .where("published", "=", true)
+    .where("locked", "=", false)
     .order("date", "DESC")
     .all(),
   {

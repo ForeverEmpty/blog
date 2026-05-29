@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
+    "comments:build": "docker compose -f docker-compose.waline.yml build waline",
+    "comments:down": "docker compose -f docker-compose.waline.yml down",
+    "comments:up": "docker compose -f docker-compose.waline.yml up -d --build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -12,10 +15,15 @@
   "dependencies": {
     "@nuxt/content": "3.14.0",
     "@nuxt/image": "2.0.0",
+    "@nuxtjs/mdc": "0.22.0",
     "@pinia/nuxt": "^0.11.3",
     "@types/node": "^25.9.1",
+    "@waline/client": "^3.13.0",
     "better-sqlite3": "^12.10.0",
+    "fuse.js": "^7.3.0",
+    "minimark": "^1.0.0",
     "nuxt": "^4.4.6",
+    "pg": "^8.21.0",
     "vue": "^3.5.34",
     "vue-router": "^5.0.7"
   },
@@ -23,6 +31,7 @@
     "@iconify-json/lucide": "^1.2.109",
     "@nuxt/icon": "^2.2.2",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/pg": "^8.20.0",
     "tailwindcss": "^4.3.0"
   },
   "pnpm": {

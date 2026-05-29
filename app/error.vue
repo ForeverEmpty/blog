@@ -29,24 +29,7 @@ const retryPage = () => {
 }
 
 useHead({
-  title: `${statusCode.value} - ${appConfig.site.name}`,
-  script: [
-    {
-      id: 'theme-init',
-      innerHTML: `(() => {
-  try {
-    const mode = localStorage.getItem('chanko-theme-mode') || 'system'
-    const root = document.documentElement
-    if (mode === 'dark' || mode === 'light') {
-      root.dataset.theme = mode
-    } else {
-      root.removeAttribute('data-theme')
-    }
-    root.dataset.themeMode = mode
-  } catch {}
-})()`
-    }
-  ]
+  title: `${statusCode.value} - ${appConfig.site.name}`
 })
 </script>
 

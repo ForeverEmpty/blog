@@ -1,8 +1,25 @@
 <script setup lang="ts">
+type ProjectItem = {
+  id?: string
+  name: string
+  description: string
+  status: string
+  category: string
+  sourceUrl: string
+  launchUrl: string
+  tags: string[]
+}
+
 const appConfig = useAppConfig();
 const route = useRoute();
 const router = useRouter();
-const projects = computed(() => appConfig.projects.items ?? []);
+const { data: projectItems } = await useAsyncData("projects-list", () =>
+  $fetch<ProjectItem[]>("/api/projects"),
+  {
+    default: () => appConfig.projects.items ?? [],
+  },
+);
+const projects = computed(() => projectItems.value);
 const projectCount = computed(() => projects.value.length);
 const pageSize = computed(() => appConfig.projects.pageSize);
 const requestedPage = computed(() => {

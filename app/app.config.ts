@@ -11,11 +11,12 @@ export default defineAppConfig({
       { label: '文章', href: '/blog' },
       { label: '归档', href: '/archive' },
       { label: '项目', href: '/projects' },
+      { label: '友链', href: '/friends' },
       { label: '关于', href: '/about' }
     ],
     admin: {
       label: '后台',
-      href: '#'
+      href: '/admin'
     }
   },
   home: {
@@ -27,33 +28,33 @@ export default defineAppConfig({
     },
     articleIndex: {
       words: ['写作', '思考', '记录', '发布'],
-      title: '最新文章区会在这里接入真实内容。',
-      description: '从这里开始，你可以查看最新发布的文章。',
+      title: '近日文章',
+      description: '按发布时间展示最新文章，适合从近处开始阅读。',
       states: [
-        '接入文章接口后显示最新发布',
-        '接入后台后显示精选文章',
-        '接入标签后显示阅读路径'
+        '最新发布',
+        '阅读路径',
+        '持续更新'
       ]
     },
     projectIndex: {
       words: ['项目', '工具', '部署', '源码'],
-      title: '公开项目区会在这里接入真实作品。',
-      description: '从首页直接进入已经部署的工具和源码仓库，项目详情页保留完整列表、状态与分页。'
+      title: '近期项目',
+      description: '从首页直接进入已上线的工具、实验和源码仓库。'
     }
   },
   blogList: {
     eyebrow: 'Writing Index',
     title: '文章目录',
     pageSize: 5,
-    description: '所有已发布文章会在这里按时间整理。当前后台内容接口尚未接入，因此页面先呈现真实的空状态与列表框架。',
-    emptyKicker: 'Content API Pending',
-    emptyTitle: '还没有可展示的文章。',
-    emptyDescription: '接入文章接口后，这里会显示已发布内容、分类与阅读状态；在此之前不编造文章、日期或阅读数据。',
-    integrationDescription: '列表页先保留阅读入口的结构：标题区负责定位，列表区承载真实内容，接入项用于标记后续后台数据需要提供的字段。',
+    description: '所有文章按发布时间倒序排列，保留分类、标签和摘要，方便快速找到想读的内容。',
+    emptyKicker: 'Writing Queue',
+    emptyTitle: '文章正在整理中。',
+    emptyDescription: '新的文章发布后会出现在这里。你也可以先回到首页查看最近更新。',
+    integrationDescription: '灵光乍现，日常记录，技术分享，都在这里找到。',
     integrationItems: [
-      'Article API',
-      'Publish Status',
-      'Category Fields'
+      '最新发布',
+      '分类索引',
+      '标签线索'
     ],
     homeAction: {
       label: '返回首页',
@@ -67,18 +68,32 @@ export default defineAppConfig({
     temperature: 0.2,
     maxTokens: 700
   },
+  comments: {
+    enabled: true,
+    provider: 'waline',
+    waline: {
+      serverURL: 'http://localhost:8360',
+      lang: 'zh-CN',
+      pageSize: 10,
+      wordLimit: 1600,
+      login: 'enable',
+      commentSorting: 'latest',
+      meta: ['nick', 'mail', 'link'],
+      requiredMeta: ['nick', 'mail']
+    }
+  },
   archive: {
     eyebrow: 'Archive',
     title: '归档',
-    description: '文章会在这里按年份、月份和发布状态收束成一条清楚的时间线。当前内容接口尚未接入，因此只保留真实空状态。',
-    emptyKicker: 'Timeline Pending',
-    emptyTitle: '还没有可归档的文章。',
-    emptyDescription: '接入文章接口后，这里会按发布时间生成归档节点；在此之前不生成虚构年份、月份或文章数量。',
-    integrationDescription: '归档页需要后台提供稳定的发布日期、发布状态和文章 slug。页面先把阅读路径留出来，避免用假时间线填充空间。',
+    description: '按年份和月份整理全部文章，把零散记录收束成一条清楚的时间线。',
+    emptyKicker: 'Timeline',
+    emptyTitle: '时间线正在等待第一篇文章。',
+    emptyDescription: '发布文章后，归档会自动按日期分组，形成可折叠的阅读时间线。',
+    integrationDescription: '回忆过去，记录现在，规划未来。',
     integrationItems: [
-      'Published Date',
-      'Article Slug',
-      'Archive Grouping'
+      '年份分组',
+      '月份折叠',
+      '时间回看'
     ],
     primaryAction: {
       label: '查看文章目录',
@@ -89,15 +104,15 @@ export default defineAppConfig({
     eyebrow: 'Projects',
     title: '项目',
     pageSize: 4,
-    description: '这里用于展示博客相关工具、实验页面和公开项目。项目条目会链接到源码、部署页面和当前状态。',
-    emptyKicker: 'Project API Pending',
-    emptyTitle: '还没有公开项目。',
-    emptyDescription: '接入项目数据后，这里会展示项目名称、状态、链接和说明；在此之前不编造仓库、进度或上线地址。',
-    integrationDescription: '项目页更接近作品目录：它需要清晰区分已发布、实验中和内部使用的项目，后续可以直接接入后台管理字段。',
+    description: '这里整理公开项目、独立工具和实验页面，每个条目都提供线上访问入口和源码仓库。',
+    emptyKicker: 'Project Shelf',
+    emptyTitle: '项目正在整理中。',
+    emptyDescription: '公开项目准备完成后，将展示状态、说明、源码和访问入口。',
+    integrationDescription: '记录已经落地的工具和实验，方便从作品本身继续追踪源码与部署状态。',
     integrationItems: [
-      'Project Status',
-      'Repository Link',
-      'Launch URL'
+      '上线状态',
+      '源码仓库',
+      '访问入口'
     ],
     primaryAction: {
       label: '返回文章目录',
@@ -115,14 +130,45 @@ export default defineAppConfig({
       }
     ]
   },
+  friends: {
+    eyebrow: 'Friends',
+    title: '友链',
+    description: '这里收藏长期阅读、互相访问和持续更新的站点。友链更像一张安静的地图，把分散的创作者连接起来。',
+    emptyKicker: 'Open List',
+    emptyTitle: '欢迎交换友链。',
+    emptyDescription: '如果你的站点保持原创、稳定访问，并愿意互相放置链接，可以通过关于页面联系我。',
+    profileTitle: '本站信息',
+    profileDescription: '用于交换友链时复制的基础信息。',
+    siteProfile: {
+      name: 'ChankoBlog',
+      url: '/',
+      urlLabel: '当前站点',
+      description: '一个面向写作、思考与发布的 Nuxt 4 博客。',
+      avatarText: 'CB',
+      tags: ['Nuxt', 'Writing', 'Blog']
+    },
+    exchangeTitle: '交换原则',
+    exchangeDescription: '我更倾向于收录个人长期维护的站点，而不是一次性活动页或纯聚合页面。',
+    exchangeItems: [
+      '原创内容',
+      '稳定访问',
+      '互相链接'
+    ],
+    primaryAction: {
+      label: '联系交换',
+      href: '/about'
+    },
+    items: []
+  },
   footer: {
-    description: '一个面向写作、思考与发布的 Nuxt 4 博客。页面以文字为主角，让后台和内容系统逐步接入。',
+    description: '一个面向写作、思考与发布的 Nuxt 4 博客。页面以文字为主角，记录文章、项目和持续更新的想法。',
     homeAriaLabel: '回到 ChankoBlog 首页顶部',
     links: [
       { label: '首页', href: '/' },
       { label: '文章', href: '/blog' },
       { label: '归档', href: '/archive' },
       { label: '项目', href: '/projects' },
+      { label: '友链', href: '/friends' },
       { label: '关于', href: '/about' }
     ]
   },

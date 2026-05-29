@@ -1,4 +1,10 @@
-export type ThemeMode = 'light' | 'dark' | 'system'
+import type { ThemeMode } from '~/utils/themeMode'
+import {
+  applyThemeModeToDocument,
+  getInitialThemeMode,
+  getStoredThemeMode,
+  themeModeStorageKey
+} from '~/utils/themeMode'
 
 type ThemeOption = {
   mode: ThemeMode
@@ -7,7 +13,6 @@ type ThemeOption = {
   icon: string
 }
 
-const storageKey = 'chanko-theme-mode'
 const transitionClass = 'theme-is-transitioning'
 const transitionDuration = 520
 
@@ -16,20 +21,6 @@ const themeOptions: ThemeOption[] = [
   { mode: 'dark', label: '暗', title: '暗色主题', icon: 'lucide:moon' },
   { mode: 'system', label: '系统', title: '跟随系统主题', icon: 'lucide:monitor' }
 ]
-
-const isThemeMode = (value: string | null | undefined): value is ThemeMode => (
-  value === 'light' || value === 'dark' || value === 'system'
-)
-
-const getStoredThemeMode = (): ThemeMode => {
-  if (!import.meta.client) {
-    return 'system'
-  }
-
-  const storedMode = localStorage.getItem(storageKey)
-
-  return isThemeMode(storedMode) ? storedMode : 'system'
-}
 
 const prefersReducedMotion = () => (
   import.meta.client && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -44,7 +35,7 @@ const getResolvedTheme = (mode: ThemeMode) => {
 }
 
 export const useThemeMode = () => {
-  const themeMode = useState<ThemeMode>('chanko-theme-mode', () => 'system')
+  const themeMode = useState<ThemeMode>('chanko-theme-mode', getInitialThemeMode)
   let systemThemeQuery: MediaQueryList | undefined
   let transitionTimer: number | undefined
 
@@ -70,21 +61,13 @@ export const useThemeMode = () => {
       return
     }
 
-    const root = document.documentElement
-
-    if (mode === 'system') {
-      root.removeAttribute('data-theme')
-    } else {
-      root.dataset.theme = mode
-    }
-
-    root.dataset.themeMode = mode
+    applyThemeModeToDocument(mode)
     notifyThemeChange()
   }
 
   const commitThemeMode = (mode: ThemeMode) => {
     themeMode.value = mode
-    localStorage.setItem(storageKey, mode)
+    localStorage.setItem(themeModeStorageKey, mode)
     applyThemeMode(mode)
   }
 

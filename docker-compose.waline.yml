@@ -1,0 +1,47 @@
+services:
+  waline-postgres:
+    image: postgres:16-alpine
+    container_name: chanko-waline-postgres
+    restart: unless-stopped
+    ports:
+      - "${WALINE_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./.data/waline-postgres:/var/lib/postgresql/data
+      - ./docker/waline-postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_DB: ${WALINE_POSTGRES_DB:-waline}
+      POSTGRES_USER: ${WALINE_POSTGRES_USER:-waline}
+      POSTGRES_PASSWORD: ${WALINE_POSTGRES_PASSWORD:-waline-local-password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  waline:
+    build:
+      context: ./docker/waline
+      args:
+        WALINE_IMAGE: ${WALINE_IMAGE:-lizheming/waline:latest}
+    image: chanko/waline:patched
+    container_name: chanko-waline
+    restart: unless-stopped
+    ports:
+      - "8360:8360"
+    depends_on:
+      waline-postgres:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      PG_DB: ${WALINE_POSTGRES_DB:-waline}
+      PG_USER: ${WALINE_POSTGRES_USER:-waline}
+      PG_PASSWORD: ${WALINE_POSTGRES_PASSWORD:-waline-local-password}
+      PG_HOST: waline-postgres
+      PG_PORT: 5432
+      JWT_TOKEN: ${WALINE_JWT_TOKEN:-change-me-before-use}
+      SITE_NAME: ${WALINE_SITE_NAME:-ChankoBlog}
+      SITE_URL: ${WALINE_SITE_URL:-http://localhost:3000}
+      AUTHOR_EMAIL: ${WALINE_AUTHOR_EMAIL:-}
+      SECURE_DOMAINS: ${WALINE_SECURE_DOMAINS:-localhost:3000,127.0.0.1:3000,localhost:8360,127.0.0.1:8360}
+      WALINE_ADMIN_MODULE_ASSET_URL: ${WALINE_ADMIN_MODULE_ASSET_URL:-https://unpkg.com/@waline/admin@latest}
