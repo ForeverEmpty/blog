@@ -28,8 +28,10 @@ const retryPage = () => {
   }
 }
 
-useHead({
-  title: `${statusCode.value} - ${appConfig.site.name}`
+useSiteSeo({
+  title: String(statusCode.value),
+  description: errorDescription.value,
+  noindex: true
 })
 </script>
 

@@ -177,6 +177,7 @@ onBeforeUnmount(destroyWaline);
   --waline-avatar-radius: var(--radius-sm);
   --waline-box-shadow: none;
   container-type: inline-size;
+  isolation: isolate;
 }
 
 .article-comments__waline {
@@ -190,8 +191,10 @@ onBeforeUnmount(destroyWaline);
 }
 
 .article-comments__waline .wl-panel {
+  position: relative;
+  z-index: 2;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--paper);
@@ -250,6 +253,8 @@ onBeforeUnmount(destroyWaline);
 }
 
 .article-comments__waline .wl-footer {
+  position: relative;
+  z-index: 3;
   border-top: 1px solid var(--line);
   background: var(--code-surface);
 }
@@ -259,6 +264,16 @@ onBeforeUnmount(destroyWaline);
 .article-comments__waline .wl-gif-popup,
 .article-comments__waline .wl-emoji-popup {
   color: var(--muted);
+}
+
+.article-comments__waline .wl-gif-popup,
+.article-comments__waline .wl-emoji-popup {
+  z-index: 40;
+  max-width: min(526px, calc(100vw - var(--space-4)));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  box-shadow: 0 18px 48px color-mix(in oklch, var(--ink), transparent 78%);
 }
 
 .article-comments__waline .wl-info {

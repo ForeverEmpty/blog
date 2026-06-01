@@ -25,7 +25,7 @@ const { themeMode, themeOptions, indicatorStyle, setThemeMode } = useThemeMode()
       :aria-checked="themeMode === option.mode"
       :aria-label="option.title"
       :title="option.title"
-      @click="setThemeMode(option.mode)"
+      @click="setThemeMode(option.mode, $event)"
     >
       <Icon
         :name="option.icon"

@@ -14,6 +14,7 @@ type ThemeOption = {
 }
 
 const transitionClass = 'theme-is-transitioning'
+const viewTransitionClass = 'theme-view-transitioning'
 const transitionDuration = 520
 
 const themeOptions: ThemeOption[] = [
@@ -25,6 +26,42 @@ const themeOptions: ThemeOption[] = [
 const prefersReducedMotion = () => (
   import.meta.client && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 )
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => {
+    finished: Promise<void>
+  }
+}
+
+type ThemeTransitionOrigin = {
+  x: number
+  y: number
+}
+
+const getTransitionOrigin = (event?: Event): ThemeTransitionOrigin => {
+  if (!import.meta.client) {
+    return { x: 0, y: 0 }
+  }
+
+  if (event instanceof MouseEvent || event instanceof PointerEvent) {
+    return {
+      x: event.clientX,
+      y: event.clientY
+    }
+  }
+
+  return {
+    x: window.innerWidth / 2,
+    y: window.innerHeight / 2
+  }
+}
+
+const applyTransitionOrigin = (origin: ThemeTransitionOrigin) => {
+  const root = document.documentElement
+
+  root.style.setProperty('--theme-transition-x', `${origin.x}px`)
+  root.style.setProperty('--theme-transition-y', `${origin.y}px`)
+}
 
 const getResolvedTheme = (mode: ThemeMode) => {
   if (!import.meta.client || mode !== 'system') {
@@ -76,16 +113,28 @@ export const useThemeMode = () => {
 
     window.clearTimeout(transitionTimer)
     root.classList.remove(transitionClass)
+    root.classList.remove(viewTransitionClass)
   }
 
-  const runThemeTransition = (mode: ThemeMode) => {
+  const runThemeTransition = (mode: ThemeMode, event?: Event) => {
     const root = document.documentElement
 
     window.clearTimeout(transitionTimer)
+    applyTransitionOrigin(getTransitionOrigin(event))
 
     if (prefersReducedMotion()) {
       commitThemeMode(mode)
       finishTransition()
+      return
+    }
+
+    const viewTransitionDocument = document as ViewTransitionDocument
+
+    if (viewTransitionDocument.startViewTransition) {
+      root.classList.add(viewTransitionClass)
+      viewTransitionDocument.startViewTransition(() => {
+        commitThemeMode(mode)
+      }).finished.finally(finishTransition)
       return
     }
 
@@ -94,12 +143,12 @@ export const useThemeMode = () => {
     transitionTimer = window.setTimeout(finishTransition, transitionDuration)
   }
 
-  const setThemeMode = (mode: ThemeMode) => {
+  const setThemeMode = (mode: ThemeMode, event?: Event) => {
     if (!import.meta.client || themeMode.value === mode) {
       return
     }
 
-    runThemeTransition(mode)
+    runThemeTransition(mode, event)
   }
 
   const syncSystemTheme = () => {
@@ -120,6 +169,7 @@ export const useThemeMode = () => {
     window.clearTimeout(transitionTimer)
     systemThemeQuery?.removeEventListener('change', syncSystemTheme)
     document.documentElement.classList.remove(transitionClass)
+    document.documentElement.classList.remove(viewTransitionClass)
   })
 
   return {

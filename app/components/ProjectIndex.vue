@@ -11,6 +11,11 @@ defineProps<{
     sourceUrl: string
     launchUrl: string
     tags: string[]
+    featured?: boolean
+    hidden?: boolean
+    order?: number
+    coverUrl?: string
+    updatedAt?: string
   }[]
 }>()
 </script>

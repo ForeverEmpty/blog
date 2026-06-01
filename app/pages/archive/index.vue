@@ -94,8 +94,17 @@ const isMonthCollapsed = (year: string, month: string) => (
   collapsedMonths.value.includes(monthCollapseId(year, month))
 );
 
-useHead({
-  title: `${appConfig.archive.title} - ${appConfig.site.name}`,
+useSiteSeo({
+  title: appConfig.archive.title,
+  description: appConfig.archive.description,
+  path: '/archive',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: appConfig.archive.title,
+    description: appConfig.archive.description,
+    url: useAbsoluteSiteUrl('/archive')
+  },
 });
 </script>
 

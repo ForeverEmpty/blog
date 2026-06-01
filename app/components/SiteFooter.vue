@@ -115,9 +115,22 @@ const {
           </AppLinkButton>
         </nav>
 
-        <p class="m-0 text-sm text-quiet">
-          © {{ currentYear }} {{ appConfig.site.name }}
-        </p>
+        <div class="grid justify-items-end gap-2 max-[760px]:justify-items-start">
+          <nav class="flex flex-wrap justify-end gap-(--space-1) text-sm text-muted max-[760px]:justify-start" aria-label="订阅">
+            <AppLinkButton
+              v-for="feed in appConfig.footer.feeds"
+              :key="feed.href"
+              variant="text"
+              class="font-normal"
+              :href="feed.href"
+            >
+              {{ feed.label }}
+            </AppLinkButton>
+          </nav>
+          <p class="m-0 text-sm text-quiet">
+            © {{ currentYear }} {{ appConfig.site.name }}
+          </p>
+        </div>
       </div>
     </div>
   </footer>

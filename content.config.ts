@@ -15,6 +15,7 @@ export default defineContentConfig({
         views: z.number().int().nonnegative().optional(),
         published: z.boolean().default(true),
         locked: z.boolean().default(false),
+        pinned: z.boolean().default(false),
         tags: z.array(z.string()).default([])
       })
     }),

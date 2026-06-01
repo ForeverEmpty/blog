@@ -10,8 +10,6 @@ const { data: article } = await useAsyncData(`blog-${slug.value}`, () =>
 const { data: articleSiblings } = await useAsyncData("blog-siblings", () =>
   queryCollection("blog")
     .where("published", "=", true)
-    .where("locked", "=", false)
-    .order("date", "DESC")
     .all(),
   {
     default: () => [],
@@ -25,26 +23,43 @@ if (!article.value) {
   });
 }
 
-if (article.value.locked) {
+if (article.value.published === false) {
   throw createError({
-    statusCode: 403,
-    statusMessage: "Article Locked",
+    statusCode: 404,
+    statusMessage: "Article Not Found",
   });
 }
 
-const tocLinks = useContentTocLinks(() => article.value);
+const { data: articleViewStats } = await useAsyncData(
+  `blog-${slug.value}-views`,
+  () => $fetch<{ slug: string; views: number }>(`/api/blog/${encodeURIComponent(slug.value)}/views`),
+  {
+    default: () => ({
+      slug: slug.value,
+      views: Number(article.value.views) || 0,
+    }),
+  },
+);
+
+const isArticleLocked = computed(() => article.value.locked === true);
+const articleViews = ref(articleViewStats.value.views);
+const articleSiblingsSorted = computed(() => sortArticles(articleSiblings.value));
+const articleTocLinks = useContentTocLinks(() => article.value);
+const tocLinks = computed(() => (
+  isArticleLocked.value ? [] : articleTocLinks.value
+));
 const readingStats = useContentReadingStats(() => article.value);
 const currentArticleIndex = computed(() => (
-  articleSiblings.value.findIndex((item) => item.path === article.value.path)
+  articleSiblingsSorted.value.findIndex((item) => item.path === article.value.path)
 ));
 const previousArticle = computed(() => (
   currentArticleIndex.value > 0
-    ? articleSiblings.value[currentArticleIndex.value - 1]
+    ? articleSiblingsSorted.value[currentArticleIndex.value - 1]
     : null
 ));
 const nextArticle = computed(() => (
-  currentArticleIndex.value >= 0 && currentArticleIndex.value < articleSiblings.value.length - 1
-    ? articleSiblings.value[currentArticleIndex.value + 1]
+  currentArticleIndex.value >= 0 && currentArticleIndex.value < articleSiblingsSorted.value.length - 1
+    ? articleSiblingsSorted.value[currentArticleIndex.value + 1]
     : null
 ));
 const copyMarkdownStatus = ref<"idle" | "copied" | "error">("idle");
@@ -118,6 +133,24 @@ const copyArticleMarkdown = async () => {
   } finally {
     copyingMarkdown.value = false;
     resetCopyMarkdownStatus();
+  }
+};
+const recordCurrentArticleView = async () => {
+  if (!import.meta.client) {
+    return;
+  }
+
+  try {
+    const result = await $fetch<{ views: number }>(
+      `/api/blog/${encodeURIComponent(slug.value)}/views`,
+      {
+        method: "POST",
+      },
+    );
+
+    articleViews.value = result.views;
+  } catch {
+    articleViews.value = Math.max(articleViews.value, Number(article.value.views) || 0);
   }
 };
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -264,15 +297,51 @@ const articleTitleClass = computed(() => {
   return "text-[132px] leading-[0.95] max-[1100px]:text-[88px] max-[520px]:text-[56px]";
 });
 
-useHead({
-  title: `${article.value.title} - ${appConfig.site.name}`,
-  meta: [
-    {
-      name: "description",
-      content: article.value.description,
+useSiteSeo({
+  title: article.value.title,
+  description: article.value.description,
+  path: article.value.path,
+  type: "article",
+  noindex: isArticleLocked.value,
+  jsonLd: {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: article.value.title,
+    description: article.value.description,
+    datePublished: article.value.date,
+    dateModified: article.value.date,
+    author: {
+      "@type": "Person",
+      name: article.value.author,
+      url: article.value.authorUrl ? useAbsoluteSiteUrl(article.value.authorUrl) : useAbsoluteSiteUrl("/about"),
     },
-  ],
+    publisher: {
+      "@type": "Person",
+      name: appConfig.site.author,
+      url: useAbsoluteSiteUrl("/about"),
+    },
+    mainEntityOfPage: useAbsoluteSiteUrl(article.value.path),
+    url: useAbsoluteSiteUrl(article.value.path),
+    keywords: [article.value.category, ...article.value.tags].filter(Boolean).join(", "),
+  },
+});
+
+useHead({
   style: articleStyleBlocks,
+});
+
+watch(
+  articleViewStats,
+  (stats) => {
+    if (stats) {
+      articleViews.value = stats.views;
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  void recordCurrentArticleView();
 });
 
 onBeforeUnmount(() => {
@@ -296,7 +365,7 @@ onBeforeUnmount(() => {
         :tags="article.tags"
         :word-count="readingStats.wordCount"
         :reading-minutes="readingStats.readingMinutes"
-        :views="article.views"
+        :views="articleViews"
       />
 
       <div class="px-[clamp(var(--space-3),6vw,var(--space-12))] py-(--space-8) max-[760px]:px-(--space-2) max-[760px]:py-(--space-6)">
@@ -310,6 +379,7 @@ onBeforeUnmount(() => {
                 < 返回文章目录
               </NuxtLink>
               <button
+                v-if="!isArticleLocked"
                 type="button"
                 class="inline-flex min-h-11 w-fit cursor-pointer items-center gap-2 rounded-token border border-line bg-transparent px-(--space-2) text-sm font-bold tracking-normal text-muted! transition-[background-color,border-color,color,opacity] duration-200 hover:border-ink hover:bg-ink hover:text-paper! focus-visible:border-ink focus-visible:bg-ink focus-visible:text-paper! focus-visible:outline-none disabled:pointer-events-none disabled:opacity-60"
                 :aria-label="copyMarkdownLabel"
@@ -336,13 +406,30 @@ onBeforeUnmount(() => {
             <p class="m-0 max-w-190 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
               {{ article.description }}
             </p>
+            <div
+              v-if="isArticleLocked"
+              class="grid max-w-190 grid-cols-[auto_minmax(0,1fr)] gap-(--space-2) border border-line bg-code-surface p-(--space-3) text-ink"
+              role="status"
+            >
+              <Icon name="lucide:lock" mode="svg" class="mt-1 h-6 w-6" aria-hidden="true" />
+              <div class="grid gap-1">
+                <p class="m-0 text-sm font-bold uppercase tracking-normal text-muted">
+                  Locked Article
+                </p>
+                <p class="m-0 text-[22px] leading-[1.5] text-ink text-pretty max-[520px]:text-lg">
+                  该文章已被锁定，暂不展示正文内容。
+                </p>
+              </div>
+            </div>
           </header>
 
-          <ArticleAiSummary :slug="slug" />
+          <template v-if="!isArticleLocked">
+            <ArticleAiSummary :slug="slug" />
 
-          <ContentBody :value="articleRenderValue" />
+            <ContentBody :value="articleRenderValue" />
 
-          <ArticleComments :slug="slug" />
+            <ArticleComments :slug="slug" />
+          </template>
 
           <nav
             class="grid max-w-190 grid-cols-2 border-y border-line"
@@ -436,6 +523,7 @@ onBeforeUnmount(() => {
       </div>
 
       <ContentTableOfContents
+        v-if="!isArticleLocked"
         class="mr-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-8) max-[1000px]:col-start-2 max-[1000px]:mr-0 max-[1000px]:px-[clamp(var(--space-3),6vw,var(--space-12))] max-[1000px]:pt-0 max-[760px]:col-start-auto max-[760px]:px-(--space-2)"
         :links="tocLinks"
         label="文章目录"

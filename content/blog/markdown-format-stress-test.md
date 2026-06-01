@@ -1,16 +1,21 @@
 ---
 title: "这是一篇用于测试博客文章页目录高亮与 Markdown 全格式渲染能力的超长题目，它需要在窄屏、宽屏、目录列和列表页中都保持可读并自然换行"
 description: "用于验证标题换行、目录高亮、正文排版和常见 Markdown 语法渲染的测试文章。"
-date: "2026-05-23"
+date: 2026-05-23
 author: Chanko
 authorUrl: /about
-category: 测试记录
+category: "测试记录"
+views: 0
 published: true
+locked: false
+pinned: false
 tags:
   - Markdown
   - Test
-  - Nuxt Content
+  - "Nuxt Content"
 ---
+
+
 
 # 一级标题用于验证正文中的 H1
 

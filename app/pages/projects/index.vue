@@ -8,11 +8,17 @@ type ProjectItem = {
   sourceUrl: string
   launchUrl: string
   tags: string[]
+  featured?: boolean
+  hidden?: boolean
+  order?: number
+  coverUrl?: string
+  updatedAt?: string
 }
 
 const appConfig = useAppConfig();
 const route = useRoute();
 const router = useRouter();
+const { searchContentItems } = useArticleSearch();
 const { data: projectItems } = await useAsyncData("projects-list", () =>
   $fetch<ProjectItem[]>("/api/projects"),
   {
@@ -20,7 +26,39 @@ const { data: projectItems } = await useAsyncData("projects-list", () =>
   },
 );
 const projects = computed(() => projectItems.value);
-const projectCount = computed(() => projects.value.length);
+const queryValueList = (value: unknown) => (
+  Array.isArray(value) ? value : [value]
+).filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+const quoteSearchValue = (value: string) => `"${value.replaceAll('"', '\\"')}"`;
+const selectedCategories = computed(() => queryValueList(route.query.category));
+const selectedTags = computed(() => [
+  ...queryValueList(route.query.tag),
+  ...queryValueList(route.query.tags),
+]);
+const selectedStatuses = computed(() => queryValueList(route.query.status));
+const freeSearchQuery = computed(() => [
+  ...queryValueList(route.query.q),
+  ...queryValueList(route.query.search),
+].join(" ").trim());
+const projectSearchInput = ref(freeSearchQuery.value);
+const structuredSearchQuery = computed(() => [
+  freeSearchQuery.value,
+  ...selectedCategories.value.map((category) => `category=${quoteSearchValue(category)}`),
+  ...selectedTags.value.map((tag) => `tag=${quoteSearchValue(tag)}`),
+  ...selectedStatuses.value.map((status) => `status=${quoteSearchValue(status)}`),
+].filter(Boolean).join(" "));
+const filteredProjects = computed(() => (
+  structuredSearchQuery.value
+    ? searchContentItems(projects.value.map((project) => ({
+      ...project,
+      type: "project" as const,
+      pinned: project.featured,
+      published: !project.hidden,
+    })), structuredSearchQuery.value)
+    : projects.value
+));
+const projectCount = computed(() => filteredProjects.value.length);
+const isFiltered = computed(() => structuredSearchQuery.value.length > 0);
 const pageSize = computed(() => appConfig.projects.pageSize);
 const requestedPage = computed(() => {
   const page = Number.parseInt(String(route.query.page || "1"), 10);
@@ -31,7 +69,7 @@ const pageCount = computed(() => Math.max(1, Math.ceil(projectCount.value / page
 const currentPage = computed(() => Math.min(Math.max(1, requestedPage.value), pageCount.value));
 const projectStartIndex = computed(() => (currentPage.value - 1) * pageSize.value);
 const paginatedProjects = computed(() => (
-  projects.value.slice(projectStartIndex.value, projectStartIndex.value + pageSize.value)
+  filteredProjects.value.slice(projectStartIndex.value, projectStartIndex.value + pageSize.value)
 ));
 const setPage = async (page: number) => {
   const nextQuery = { ...route.query };
@@ -44,9 +82,55 @@ const setPage = async (page: number) => {
 
   await router.push({ query: nextQuery });
 };
+const submitProjectSearch = async () => {
+  const nextQuery = { ...route.query };
+  const query = projectSearchInput.value.trim();
 
-useHead({
-  title: `${appConfig.projects.title} - ${appConfig.site.name}`,
+  if (query) {
+    nextQuery.q = query;
+  } else {
+    delete nextQuery.q;
+    delete nextQuery.search;
+  }
+
+  delete nextQuery.page;
+  await router.push({ query: nextQuery });
+};
+const setProjectQueryFilter = async (key: "category" | "tag" | "status", value: string) => {
+  const nextQuery = { ...route.query, [key]: value };
+
+  delete nextQuery.page;
+  await router.push({ query: nextQuery });
+};
+const clearFilters = async () => {
+  const nextQuery = { ...route.query };
+
+  delete nextQuery.category;
+  delete nextQuery.tag;
+  delete nextQuery.tags;
+  delete nextQuery.status;
+  delete nextQuery.q;
+  delete nextQuery.search;
+  delete nextQuery.page;
+
+  await router.push({ query: nextQuery });
+};
+
+watch(freeSearchQuery, (value) => {
+  projectSearchInput.value = value;
+});
+
+useSiteSeo({
+  title: appConfig.projects.title,
+  description: appConfig.projects.description,
+  path: '/projects',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: appConfig.projects.title,
+    description: appConfig.projects.description,
+    url: useAbsoluteSiteUrl('/projects')
+  },
 });
 </script>
 
@@ -85,7 +169,71 @@ useHead({
           </div>
 
           <div
-            v-if="projects.length > 0"
+            class="grid gap-(--space-2) border-y border-line py-(--space-2)"
+            aria-label="项目搜索"
+          >
+            <form class="grid grid-cols-[minmax(0,1fr)_auto] gap-(--space-1) max-[640px]:grid-cols-1" @submit.prevent="submitProjectSearch">
+              <label class="grid gap-1 text-sm font-bold text-muted">
+                搜索项目
+                <input
+                  v-model="projectSearchInput"
+                  class="min-h-12 border border-line bg-code-surface px-(--space-2) text-base text-ink outline-none focus:border-ink"
+                  placeholder="关键词、category=、tag=、status=、-草稿"
+                >
+              </label>
+              <AppButton class="self-end" type="submit" variant="solid">
+                <Icon name="lucide:search" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                搜索
+              </AppButton>
+            </form>
+
+            <div
+              v-if="isFiltered"
+              class="flex flex-wrap items-center justify-between gap-(--space-2)"
+              aria-label="当前项目筛选"
+            >
+              <div class="flex flex-wrap items-center gap-(--space-1) text-sm font-bold uppercase tracking-normal text-muted">
+                <span>筛选结果</span>
+                <span
+                  v-for="category in selectedCategories"
+                  :key="`category-${category}`"
+                  class="border border-line px-(--space-1) py-1 text-ink"
+                >
+                  category={{ category }}
+                </span>
+                <span
+                  v-for="tag in selectedTags"
+                  :key="`tag-${tag}`"
+                  class="border border-line px-(--space-1) py-1 text-ink"
+                >
+                  tag={{ tag }}
+                </span>
+                <span
+                  v-for="status in selectedStatuses"
+                  :key="`status-${status}`"
+                  class="border border-line px-(--space-1) py-1 text-ink"
+                >
+                  status={{ status }}
+                </span>
+                <span
+                  v-if="freeSearchQuery"
+                  class="border border-line px-(--space-1) py-1 text-ink"
+                >
+                  q={{ freeSearchQuery }}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="border border-line bg-paper px-(--space-2) py-(--space-1) text-sm font-bold uppercase tracking-normal text-ink transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                @click="clearFilters"
+              >
+                清除筛选
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="filteredProjects.length > 0"
             class="grid border-t border-line px-(--space-2)"
             aria-label="项目列表"
           >
@@ -100,12 +248,20 @@ useHead({
 
               <div class="relative z-1 grid min-w-0 gap-(--space-2)">
                 <div class="flex flex-wrap items-center gap-x-(--space-2) gap-y-(--space-1)">
-                  <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
+                  <button
+                    type="button"
+                    class="m-0 text-left text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
+                    @click="setProjectQueryFilter('status', project.status)"
+                  >
                     {{ project.status }}
-                  </p>
-                  <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
+                  </button>
+                  <button
+                    type="button"
+                    class="m-0 text-left text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
+                    @click="setProjectQueryFilter('category', project.category)"
+                  >
                     {{ project.category }}
-                  </p>
+                  </button>
                 </div>
 
                 <h2 class="m-0 min-w-0 truncate font-display text-[88px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[64px] max-[520px]:text-[44px]">
@@ -130,9 +286,14 @@ useHead({
                   <li
                     v-for="tag in project.tags"
                     :key="tag"
-                    class="border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
                   >
-                    {{ tag }}
+                    <button
+                      type="button"
+                      class="border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-muted transition-colors duration-200 hover:bg-paper hover:text-ink group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
+                      @click="setProjectQueryFilter('tag', tag)"
+                    >
+                      {{ tag }}
+                    </button>
                   </li>
                 </ul>
               </div>
@@ -171,7 +332,7 @@ useHead({
           </div>
 
           <AppPagination
-            v-if="projects.length > 0"
+            v-if="filteredProjects.length > 0"
             :page="currentPage"
             :page-count="pageCount"
             :total="projectCount"

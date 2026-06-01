@@ -13,5 +13,18 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return updateWalineCommentStatus(id, body.status as WalineCommentStatus)
+  const comment = await updateWalineCommentStatus(id, body.status as WalineCommentStatus)
+
+  await writeAdminLog({
+    action: 'comment.update',
+    targetType: 'comment',
+    targetId: id,
+    message: `更新评论状态：${comment.author} / ${comment.status}`,
+    payload: {
+      articleSlug: comment.articleSlug,
+      status: comment.status
+    }
+  }).catch(() => {})
+
+  return comment
 })

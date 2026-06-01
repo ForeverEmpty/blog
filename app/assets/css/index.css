@@ -240,9 +240,37 @@ html[data-theme='dark'] .shiki span {
 
 html.theme-is-transitioning,
 html.theme-is-transitioning * {
-  transition-duration: 280ms;
+  transition-duration: 520ms;
   transition-property: background-color, border-color, color, fill, outline-color, stroke, text-decoration-color;
-  transition-timing-function: cubic-bezier(.2, .8, .2, 1);
+  transition-timing-function: cubic-bezier(.16, 1, .3, 1);
+}
+
+html.theme-view-transitioning::view-transition-old(root),
+html.theme-view-transitioning::view-transition-new(root) {
+  animation-duration: 620ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  mix-blend-mode: normal;
+}
+
+html.theme-view-transitioning::view-transition-old(root) {
+  animation: none;
+  z-index: 0;
+}
+
+html.theme-view-transitioning::view-transition-new(root) {
+  animation-name: theme-sphere-spread;
+  z-index: 1;
+}
+
+@keyframes theme-sphere-spread {
+  from {
+    clip-path: circle(0 at var(--theme-transition-x, 50vw) var(--theme-transition-y, 50vh));
+  }
+
+  to {
+    clip-path: circle(160vmax at var(--theme-transition-x, 50vw) var(--theme-transition-y, 50vh));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

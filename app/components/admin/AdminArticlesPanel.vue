@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ManagedArticle, PreviewArticle } from '~/types/admin'
+import type { ManagedArticle, ManagedArticleAutosave, ManagedArticleVersion, PreviewArticle } from '~/types/admin'
 import { parseMarkdownPreviewBlocks } from '~/utils/adminMarkdownPreview'
 
 const props = defineProps<{
@@ -13,13 +13,20 @@ const props = defineProps<{
   previewPending: boolean
   previewError: string
   previewArticle: PreviewArticle
+  articleVersions: ManagedArticleVersion[]
+  articleAutosaves: ManagedArticleAutosave[]
+  autosaveStatus: string
 }>()
 
 const emit = defineEmits<{
   createArticle: []
   selectArticle: [article: ManagedArticle]
   toggleArticleLock: [article: ManagedArticle]
+  toggleArticlePinned: [article: ManagedArticle]
   deleteArticle: [article: ManagedArticle]
+  restoreArticleVersion: [version: ManagedArticleVersion]
+  selectArticleAutosave: [autosave: ManagedArticleAutosave]
+  deleteArticleAutosave: [autosave: ManagedArticleAutosave]
   saveDraft: []
 }>()
 
@@ -34,6 +41,7 @@ const draftTags = defineModel<string>('draftTags', { required: true })
 const draftDescription = defineModel<string>('draftDescription', { required: true })
 const draftPublished = defineModel<boolean>('draftPublished', { required: true })
 const draftLocked = defineModel<boolean>('draftLocked', { required: true })
+const draftPinned = defineModel<boolean>('draftPinned', { required: true })
 const draftMarkdown = defineModel<string>('draftMarkdown', { required: true })
 
 const editorPreviewGrid = ref<HTMLElement | null>(null)
@@ -45,6 +53,35 @@ const editorPreviewGridStyle = computed(() => ({
   '--editor-preview-split': `${editorPreviewSplit.value}%`
 }))
 const markdownPreviewBlocks = computed(() => parseMarkdownPreviewBlocks(draftMarkdown.value))
+const draftArticles = computed(() => props.managedArticles.filter((article) => !article.published))
+const selectedArticleSlug = computed(() => (
+  props.managedArticles.find((article) => article.id === props.selectedArticleId)?.slug || ''
+))
+const visibleVersions = computed(() => (
+  props.articleVersions
+    .filter((version) => !selectedArticleSlug.value || version.slug === selectedArticleSlug.value)
+    .slice(0, 8)
+))
+const visibleAutosaves = computed(() => (
+  props.articleAutosaves
+    .filter((autosave) => !selectedArticleSlug.value || autosave.slug === selectedArticleSlug.value)
+    .slice(0, 6)
+))
+
+const formatTime = (value: string) => {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
 
 const getMarkdownLineAtCursor = (textarea: HTMLTextAreaElement) => {
   const cursorIndex = textarea.selectionStart ?? 0
@@ -213,6 +250,8 @@ onBeforeUnmount(stopEditorPreviewResize)
               <option value="draft">草稿</option>
               <option value="locked">已上锁</option>
               <option value="unlocked">未上锁</option>
+              <option value="pinned">已置顶</option>
+              <option value="unpinned">未置顶</option>
             </select>
           </label>
         </div>
@@ -238,7 +277,7 @@ onBeforeUnmount(stopEditorPreviewResize)
             >
               <span class="line-clamp-2 font-display text-[30px] leading-none text-ink text-pretty">{{ article.title }}</span>
               <span class="text-[13px] font-bold uppercase tracking-normal text-muted">
-                {{ article.published ? '已发布' : '草稿' }} / {{ article.locked ? '已上锁' : '未上锁' }} / {{ article.views }} views
+                {{ article.published ? '已发布' : '草稿' }} / {{ article.locked ? '已上锁' : '未上锁' }} / {{ article.pinned ? '已置顶' : '未置顶' }} / {{ article.views }} views
               </span>
               <span class="truncate text-[13px] font-bold uppercase tracking-normal text-muted">
                 {{ article.date }} / {{ article.category }}
@@ -248,6 +287,10 @@ onBeforeUnmount(stopEditorPreviewResize)
               <AppButton size="sm" :disabled="props.saving" @click="emit('toggleArticleLock', article)">
                 <Icon :name="article.locked ? 'lucide:lock-open' : 'lucide:lock'" mode="svg" class="h-4 w-4" aria-hidden="true" />
                 {{ article.locked ? '解锁' : '上锁' }}
+              </AppButton>
+              <AppButton size="sm" :disabled="props.saving" @click="emit('toggleArticlePinned', article)">
+                <Icon :name="article.pinned ? 'lucide:pin-off' : 'lucide:pin'" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                {{ article.pinned ? '取消置顶' : '置顶' }}
               </AppButton>
               <AppButton size="sm" variant="text" :disabled="props.saving" @click="emit('deleteArticle', article)">
                 <Icon name="lucide:trash-2" mode="svg" class="h-4 w-4" aria-hidden="true" />
@@ -262,6 +305,61 @@ onBeforeUnmount(stopEditorPreviewResize)
             </p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="grid border-y border-line" aria-label="文章草稿箱">
+      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-(--space-2) border-b border-line p-(--space-2) max-[720px]:grid-cols-1">
+        <div class="grid gap-1">
+          <h2 class="m-0 font-display text-[40px] font-normal leading-none">
+            草稿箱
+          </h2>
+          <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
+            {{ draftArticles.length }} 篇未发布文章
+          </p>
+        </div>
+        <p class="m-0 max-w-160 text-sm leading-[1.6] text-muted text-pretty">
+          未勾选“发布”的文章会保留在这里，方便继续编辑、上锁或置顶，前台不会展示草稿内容。
+        </p>
+      </div>
+
+      <div v-if="draftArticles.length > 0" class="grid md:grid-cols-2 xl:grid-cols-3">
+        <article
+          v-for="article in draftArticles"
+          :key="`draft-${article.id}`"
+          class="grid content-between gap-(--space-2) border-r border-b border-line p-(--space-2)"
+          :class="props.selectedArticleId === article.id ? 'bg-code-surface' : ''"
+        >
+          <button
+            type="button"
+            class="grid cursor-pointer gap-1 text-left focus-visible:outline-none"
+            @click="emit('selectArticle', article)"
+          >
+            <span class="line-clamp-2 font-display text-[30px] leading-none text-ink text-pretty">{{ article.title }}</span>
+            <span class="text-[13px] font-bold uppercase tracking-normal text-muted">
+              草稿 / {{ article.locked ? '已上锁' : '未上锁' }} / {{ article.pinned ? '已置顶' : '未置顶' }}
+            </span>
+            <span class="truncate text-[13px] font-bold uppercase tracking-normal text-muted">
+              {{ article.date }} / {{ article.category }}
+            </span>
+          </button>
+          <div class="flex flex-wrap gap-(--space-1)">
+            <AppButton size="sm" :disabled="props.saving" @click="emit('selectArticle', article)">
+              <Icon name="lucide:file-pen-line" mode="svg" class="h-4 w-4" aria-hidden="true" />
+              编辑
+            </AppButton>
+            <AppButton size="sm" :disabled="props.saving" @click="emit('toggleArticlePinned', article)">
+              <Icon :name="article.pinned ? 'lucide:pin-off' : 'lucide:pin'" mode="svg" class="h-4 w-4" aria-hidden="true" />
+              {{ article.pinned ? '取消置顶' : '置顶' }}
+            </AppButton>
+          </div>
+        </article>
+      </div>
+
+      <div v-else class="grid min-h-28 place-items-center p-(--space-3) text-muted">
+        <p class="m-0 text-sm font-bold">
+          暂无草稿。
+        </p>
       </div>
     </section>
 
@@ -298,10 +396,17 @@ onBeforeUnmount(stopEditorPreviewResize)
           <input v-model="draftLocked" type="checkbox" class="accent-ink">
           上锁
         </label>
+        <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 border border-line px-(--space-2) text-sm font-bold text-muted">
+          <input v-model="draftPinned" type="checkbox" class="accent-ink">
+          置顶
+        </label>
         <AppButton variant="solid" :loading="props.saving" @click="emit('saveDraft')">
           <Icon name="lucide:save" mode="svg" class="h-4 w-4" aria-hidden="true" />
           保存
         </AppButton>
+        <span class="text-[13px] font-bold text-muted">
+          {{ props.autosaveStatus }}
+        </span>
       </div>
 
       <div
@@ -370,6 +475,68 @@ onBeforeUnmount(stopEditorPreviewResize)
             <ContentBody v-else-if="props.previewValue" class="mt-(--space-4)" :value="props.previewValue" />
           </article>
         </section>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-2 gap-(--space-3) max-[980px]:grid-cols-1" aria-label="文章可靠性记录">
+      <div class="grid border-y border-line">
+        <div class="flex min-h-12 items-center justify-between gap-(--space-2) border-b border-line px-(--space-2)">
+          <h3 class="m-0 text-sm font-bold uppercase tracking-normal text-muted">
+            自动保存
+          </h3>
+          <span class="text-[13px] font-bold text-muted">{{ visibleAutosaves.length }}</span>
+        </div>
+        <article
+          v-for="autosave in visibleAutosaves"
+          :key="autosave.slug"
+          class="grid grid-cols-[minmax(0,1fr)_auto] gap-(--space-2) border-b border-line p-(--space-2)"
+        >
+          <button type="button" class="grid cursor-pointer gap-1 text-left focus-visible:outline-none" @click="emit('selectArticleAutosave', autosave)">
+            <span class="line-clamp-1 text-sm font-bold text-ink">{{ autosave.title }}</span>
+            <span class="text-[13px] font-bold uppercase tracking-normal text-muted">
+              {{ formatTime(autosave.updatedAt) }} / {{ autosave.published ? '已发布' : '草稿' }}
+            </span>
+          </button>
+          <AppButton size="sm" variant="text" :disabled="props.saving" @click="emit('deleteArticleAutosave', autosave)">
+            <Icon name="lucide:x" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            移除
+          </AppButton>
+        </article>
+        <div v-if="visibleAutosaves.length === 0" class="grid min-h-24 place-items-center border-b border-line p-(--space-2)">
+          <p class="m-0 text-sm font-bold text-muted">
+            当前文章暂无自动保存。
+          </p>
+        </div>
+      </div>
+
+      <div class="grid border-y border-line">
+        <div class="flex min-h-12 items-center justify-between gap-(--space-2) border-b border-line px-(--space-2)">
+          <h3 class="m-0 text-sm font-bold uppercase tracking-normal text-muted">
+            版本历史
+          </h3>
+          <span class="text-[13px] font-bold text-muted">{{ visibleVersions.length }}</span>
+        </div>
+        <article
+          v-for="version in visibleVersions"
+          :key="version.versionId"
+          class="grid grid-cols-[minmax(0,1fr)_auto] gap-(--space-2) border-b border-line p-(--space-2)"
+        >
+          <div class="grid gap-1">
+            <span class="line-clamp-1 text-sm font-bold text-ink">{{ version.title }}</span>
+            <span class="text-[13px] font-bold uppercase tracking-normal text-muted">
+              {{ formatTime(version.createdAt) }} / {{ version.action }}
+            </span>
+          </div>
+          <AppButton size="sm" :disabled="props.saving" @click="emit('restoreArticleVersion', version)">
+            <Icon name="lucide:rotate-ccw" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            恢复
+          </AppButton>
+        </article>
+        <div v-if="visibleVersions.length === 0" class="grid min-h-24 place-items-center border-b border-line p-(--space-2)">
+          <p class="m-0 text-sm font-bold text-muted">
+            保存或删除后会生成版本记录。
+          </p>
+        </div>
       </div>
     </section>
   </section>

@@ -123,8 +123,37 @@ export const updateWalineCommentStatus = async (id: string, status: WalineCommen
   })
 )
 
+export const updateWalineCommentStatuses = async (ids: string[], status: WalineCommentStatus) => (
+  withWalineClient(async (client) => {
+    const result = await client.query(
+      `UPDATE wl_comment
+       SET status = $1, updatedat = CURRENT_TIMESTAMP
+       WHERE id::text = ANY($2::text[])
+       RETURNING id, url, nick, mail, link, comment, ip, ua, "like", status, insertedat, createdat`,
+      [status, ids]
+    )
+
+    return result.rows.map(mapComment)
+  })
+)
+
 export const deleteWalineComment = async (id: string) => (
   withWalineClient(async (client) => {
     await client.query('DELETE FROM wl_comment WHERE id = $1 OR pid = $1 OR rid = $1', [id])
+  })
+)
+
+export const deleteWalineComments = async (ids: string[]) => (
+  withWalineClient(async (client) => {
+    const result = await client.query(
+      `DELETE FROM wl_comment
+       WHERE id::text = ANY($1::text[])
+          OR pid::text = ANY($1::text[])
+          OR rid::text = ANY($1::text[])
+       RETURNING id`,
+      [ids]
+    )
+
+    return result.rowCount || 0
   })
 )

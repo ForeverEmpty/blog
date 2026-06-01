@@ -2,8 +2,22 @@ export default defineAppConfig({
   site: {
     name: 'ChankoBlog',
     initials: 'CB',
+    description: '一个面向写作、思考与发布的 Nuxt 4 博客。',
     homeHref: '/',
-    homeAriaLabel: 'ChankoBlog 首页'
+    homeAriaLabel: 'ChankoBlog 首页',
+    author: 'Chanko',
+    locale: 'zh-CN'
+  },
+  seo: {
+    defaultTitle: 'ChankoBlog',
+    titleTemplate: '%s - ChankoBlog',
+    siteUrl: 'http://localhost:3000',
+    defaultImage: '/favicon.ico',
+    feed: {
+      rss: '/rss.xml',
+      atom: '/atom.xml',
+      json: '/feed.json'
+    }
   },
   navigation: {
     main: [
@@ -148,7 +162,7 @@ export default defineAppConfig({
       tags: ['Nuxt', 'Writing', 'Blog']
     },
     exchangeTitle: '交换原则',
-    exchangeDescription: '我更倾向于收录个人长期维护的站点，而不是一次性活动页或纯聚合页面。',
+    exchangeDescription: '更倾向于收录个人长期维护的站点，而不是一次性活动页或纯聚合页面。',
     exchangeItems: [
       '原创内容',
       '稳定访问',
@@ -161,7 +175,7 @@ export default defineAppConfig({
     items: []
   },
   footer: {
-    description: '一个面向写作、思考与发布的 Nuxt 4 博客。页面以文字为主角，记录文章、项目和持续更新的想法。',
+    description: '',
     homeAriaLabel: '回到 ChankoBlog 首页顶部',
     links: [
       { label: '首页', href: '/' },
@@ -170,6 +184,11 @@ export default defineAppConfig({
       { label: '项目', href: '/projects' },
       { label: '友链', href: '/friends' },
       { label: '关于', href: '/about' }
+    ],
+    feeds: [
+      { label: 'RSS', href: '/rss.xml' },
+      { label: 'Atom', href: '/atom.xml' },
+      { label: 'JSON Feed', href: '/feed.json' }
     ]
   },
   error: {

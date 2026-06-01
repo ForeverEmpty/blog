@@ -14,14 +14,17 @@ if (!page.value) {
 
 const tocLinks = useContentTocLinks(() => page.value);
 
-useHead({
-  title: `${page.value.title} - ${appConfig.site.name}`,
-  meta: [
-    {
-      name: "description",
-      content: page.value.description,
-    },
-  ],
+useSiteSeo({
+  title: page.value.title,
+  description: page.value.description,
+  path: '/about',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: page.value.title,
+    description: page.value.description,
+    url: useAbsoluteSiteUrl('/about')
+  },
 });
 </script>
 

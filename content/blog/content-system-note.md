@@ -1,15 +1,21 @@
 ---
-title: 内容系统接入记录
-description: 记录 ChankoBlog 从静态页面走向 Nuxt Content 内容驱动页面的第一步。
+title: "内容系统接入记录"
+description: "记录 ChankoBlog 从静态页面走向 Nuxt Content 内容驱动页面的第一步。"
 date: 2026-05-23
 author: Chanko
 authorUrl: /about
-category: 开发记录
+category: "开发记录"
+views: 0
 published: true
+locked: false
+pinned: false
 tags:
-  - Nuxt Content
+  - "Nuxt Content"
   - ChankoBlog
 ---
+
+
+
 
 这篇文章用于验证 ChankoBlog 的内容系统接入：文章数据来自 `content/blog`，页面由 Nuxt Content 查询和渲染。
 

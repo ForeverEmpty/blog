@@ -1,6 +1,22 @@
 <script setup lang="ts">
 import { dailyQuote as fallbackDailyQuote, getDailyQuote } from "@/config/dailyQuote";
 
+type HomeProject = {
+  id?: string
+  name: string
+  description: string
+  status: string
+  category: string
+  sourceUrl: string
+  launchUrl: string
+  tags: string[]
+  featured?: boolean
+  hidden?: boolean
+  order?: number
+  coverUrl?: string
+  updatedAt?: string
+}
+
 const appConfig = useAppConfig();
 
 const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
@@ -10,15 +26,27 @@ const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
 const { data: articles } = await useAsyncData("home-blog-list", () =>
   queryCollection("blog")
     .where("published", "=", true)
-    .order("date", "DESC")
-    .limit(3)
     .all(),
   {
     default: () => [],
   },
 );
 
-const projects = computed(() => (appConfig.projects.items ?? []).slice(0, 3));
+const { data: projectItems } = await useAsyncData("home-project-list", () =>
+  $fetch<HomeProject[]>("/api/projects"),
+  {
+    default: () => [],
+  },
+);
+
+const projects = computed(() => projectItems.value.slice(0, 3));
+const homeArticles = computed(() => sortArticles(articles.value).slice(0, 3));
+
+useSiteSeo({
+  title: appConfig.home.title,
+  description: appConfig.site.description,
+  path: '/',
+});
 </script>
 
 <template>
@@ -50,7 +78,7 @@ const projects = computed(() => (appConfig.projects.items ?? []).slice(0, 3));
       :words="appConfig.home.articleIndex.words"
       :title="appConfig.home.articleIndex.title"
       :description="appConfig.home.articleIndex.description"
-      :articles="articles"
+      :articles="homeArticles"
     />
 
     <ProjectIndex

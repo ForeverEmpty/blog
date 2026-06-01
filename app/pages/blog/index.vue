@@ -2,19 +2,45 @@
 const appConfig = useAppConfig();
 const route = useRoute();
 const router = useRouter();
+const { searchContentItems } = useArticleSearch();
 
 const { data: articles } = await useAsyncData("blog-list", () =>
   queryCollection("blog")
     .where("published", "=", true)
-    .where("locked", "=", false)
-    .order("date", "DESC")
     .all(),
   {
     default: () => [],
   },
 );
 
-const articleCount = computed(() => articles.value.length);
+const sortedArticles = computed(() => sortArticles(articles.value));
+const queryValueList = (value: unknown) => (
+  Array.isArray(value) ? value : [value]
+).filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+
+const quoteSearchValue = (value: string) => `"${value.replaceAll('"', '\\"')}"`;
+
+const selectedCategories = computed(() => queryValueList(route.query.category));
+const selectedTags = computed(() => [
+  ...queryValueList(route.query.tag),
+  ...queryValueList(route.query.tags),
+]);
+const freeSearchQuery = computed(() => [
+  ...queryValueList(route.query.q),
+  ...queryValueList(route.query.search),
+].join(" ").trim());
+const structuredSearchQuery = computed(() => [
+  freeSearchQuery.value,
+  ...selectedCategories.value.map((category) => `category=${quoteSearchValue(category)}`),
+  ...selectedTags.value.map((tag) => `tag=${quoteSearchValue(tag)}`),
+].filter(Boolean).join(" "));
+const filteredArticles = computed(() => (
+  structuredSearchQuery.value
+    ? searchContentItems(sortedArticles.value, structuredSearchQuery.value)
+    : sortedArticles.value
+));
+const isFiltered = computed(() => structuredSearchQuery.value.length > 0);
+const articleCount = computed(() => filteredArticles.value.length);
 const pageSize = computed(() => appConfig.blogList.pageSize);
 const requestedPage = computed(() => {
   const page = Number.parseInt(String(route.query.page || "1"), 10);
@@ -26,7 +52,7 @@ const currentPage = computed(() => Math.min(Math.max(1, requestedPage.value), pa
 const paginatedArticles = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
 
-  return articles.value.slice(start, start + pageSize.value);
+  return filteredArticles.value.slice(start, start + pageSize.value);
 });
 const setPage = async (page: number) => {
   const nextQuery = { ...route.query };
@@ -39,9 +65,30 @@ const setPage = async (page: number) => {
 
   await router.push({ query: nextQuery });
 };
+const clearFilters = async () => {
+  const nextQuery = { ...route.query };
 
-useHead({
-  title: `${appConfig.blogList.title} - ${appConfig.site.name}`,
+  delete nextQuery.category;
+  delete nextQuery.tag;
+  delete nextQuery.tags;
+  delete nextQuery.q;
+  delete nextQuery.search;
+  delete nextQuery.page;
+
+  await router.push({ query: nextQuery });
+};
+
+useSiteSeo({
+  title: appConfig.blogList.title,
+  description: appConfig.blogList.description,
+  path: '/blog',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: appConfig.blogList.title,
+    description: appConfig.blogList.description,
+    url: useAbsoluteSiteUrl('/blog')
+  },
 });
 </script>
 
@@ -79,15 +126,52 @@ useHead({
             </p>
           </div>
 
+          <div
+            v-if="isFiltered"
+            class="flex flex-wrap items-center justify-between gap-(--space-2) border-y border-line py-(--space-2)"
+            aria-label="当前文章筛选"
+          >
+            <div class="flex flex-wrap items-center gap-(--space-1) text-sm font-bold uppercase tracking-normal text-muted">
+              <span>筛选结果</span>
+              <span
+                v-for="category in selectedCategories"
+                :key="`category-${category}`"
+                class="border border-line px-(--space-1) py-1 text-ink"
+              >
+                category={{ category }}
+              </span>
+              <span
+                v-for="tag in selectedTags"
+                :key="`tag-${tag}`"
+                class="border border-line px-(--space-1) py-1 text-ink"
+              >
+                tag={{ tag }}
+              </span>
+              <span
+                v-if="freeSearchQuery"
+                class="border border-line px-(--space-1) py-1 text-ink"
+              >
+                q={{ freeSearchQuery }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="border border-line bg-paper px-(--space-2) py-(--space-1) text-sm font-bold uppercase tracking-normal text-ink transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              @click="clearFilters"
+            >
+              清除筛选
+            </button>
+          </div>
+
           <ArticleList
-            v-if="articles.length > 0"
+            v-if="filteredArticles.length > 0"
             :articles="paginatedArticles"
             label="文章列表"
             :start-index="(currentPage - 1) * pageSize"
           />
 
           <AppPagination
-            v-if="articles.length > 0"
+            v-if="filteredArticles.length > 0"
             :page="currentPage"
             :page-count="pageCount"
             :total="articleCount"

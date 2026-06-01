@@ -1,0 +1,16 @@
+[
+  {
+    "id": "project-tomodoro-mpq901dz",
+    "name": "Tomodoro",
+    "description": "一个面向专注工作流的番茄钟项目，提供任务节奏、倒计时和轻量化时间管理体验。",
+    "status": "已上线",
+    "category": "效率工具",
+    "sourceUrl": "https://github.com/ForeverEmpty/Tomodoro",
+    "launchUrl": "https://foreverempty.github.io/Tomodoro/#/",
+    "tags": [
+      "Tomodoro",
+      "Timer",
+      "GitHub Pages"
+    ]
+  }
+]

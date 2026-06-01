@@ -7,28 +7,130 @@ type FriendItem = {
   intro?: string
   description: string
   category: string
+  status?: '待审核' | '已通过' | '已拒绝'
   tags: string[]
+  contact?: string
+  backlinkUrl?: string
+  reviewNote?: string
+  featured?: boolean
+  order?: number
+  submittedAt?: string
+  reviewedAt?: string
 }
 
 const appConfig = useAppConfig();
-const { data: friendItems } = await useAsyncData("friends-list", () =>
+const { data: friendItems, refresh: refreshFriends } = await useAsyncData("friends-list", () =>
   $fetch<FriendItem[]>("/api/friends"),
   {
     default: () => appConfig.friends.items ?? [],
   },
 );
 const friends = computed(() => friendItems.value);
+const approvedFriends = computed(() => friends.value.filter((friend) => friend.status !== "待审核"));
+const pendingFriends = computed(() => friends.value.filter((friend) => friend.status === "待审核"));
 const friendCount = computed(() => friends.value.length);
 const isImageIcon = (icon?: string) => Boolean(icon && (/^(https?:)?\/\//.test(icon) || icon.startsWith('/')));
+const applyOpen = ref(false);
+const applying = ref(false);
+const applySubmitted = ref(false);
+const applyMessage = ref("");
+const applyError = ref("");
+const applyName = ref("");
+const applyUrl = ref("");
+const applyIcon = ref("");
+const applyIntro = ref("");
+const applyDescription = ref("");
+const applyContact = ref("");
+const applyBacklinkUrl = ref("");
+const applyCategory = ref("个人站点");
+const applyTags = ref("");
+const applyTagList = computed(() => (
+  applyTags.value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+));
 
-useHead({
-  title: `${appConfig.friends.title} - ${appConfig.site.name}`,
-  meta: [
-    {
-      name: "description",
-      content: appConfig.friends.description,
-    },
-  ],
+const resetApplyForm = () => {
+  applyName.value = "";
+  applyUrl.value = "";
+  applyIcon.value = "";
+  applyIntro.value = "";
+  applyDescription.value = "";
+  applyContact.value = "";
+  applyBacklinkUrl.value = "";
+  applyCategory.value = "个人站点";
+  applyTags.value = "";
+};
+
+const openApplyDialog = () => {
+  applyOpen.value = true;
+  applyError.value = "";
+  applyMessage.value = "";
+  applySubmitted.value = false;
+};
+
+const closeApplyDialog = () => {
+  if (applying.value) {
+    return;
+  }
+
+  applyOpen.value = false;
+};
+
+const submitFriendApplication = async () => {
+  applying.value = true;
+  applyError.value = "";
+  applyMessage.value = "";
+
+  try {
+    await $fetch("/api/friends/apply", {
+      method: "POST",
+      body: {
+        name: applyName.value,
+        url: applyUrl.value,
+        icon: applyIcon.value,
+        intro: applyIntro.value,
+        description: applyDescription.value,
+        contact: applyContact.value,
+        backlinkUrl: applyBacklinkUrl.value,
+        category: applyCategory.value,
+        tags: applyTagList.value,
+      },
+    });
+    await refreshFriends();
+    applyMessage.value = "申请已提交，审核前会先显示在待审核列表。";
+    applySubmitted.value = true;
+    resetApplyForm();
+  } catch (error) {
+    const statusMessage = (error as { data?: { statusMessage?: string } })?.data?.statusMessage;
+
+    if (statusMessage === "Friend application already exists") {
+      applyError.value = "该站点已在友链或申请列表中。";
+    } else if (statusMessage === "Too many friend applications") {
+      applyError.value = "提交过于频繁，请稍后再试。";
+    } else if (statusMessage === "Backlink url must be a valid http(s) url") {
+      applyError.value = "返链地址需要是有效的 http(s) 链接。";
+    } else {
+      applyError.value = "申请未通过基础校验，请检查链接、内容长度或垃圾关键词。";
+    }
+    applySubmitted.value = false;
+  } finally {
+    applying.value = false;
+  }
+};
+
+useSiteSeo({
+  title: appConfig.friends.title,
+  description: appConfig.friends.description,
+  path: '/friends',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: appConfig.friends.title,
+    description: appConfig.friends.description,
+    url: useAbsoluteSiteUrl('/friends')
+  },
 });
 </script>
 
@@ -64,6 +166,12 @@ useHead({
             <p class="m-0 max-w-190 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
               {{ appConfig.friends.description }}
             </p>
+            <div class="flex flex-wrap gap-(--space-1)">
+              <AppButton variant="solid" @click="openApplyDialog">
+                <Icon name="lucide:send" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                申请友链
+              </AppButton>
+            </div>
           </header>
 
           <section
@@ -118,12 +226,12 @@ useHead({
           </section>
 
           <div
-            v-if="friends.length > 0"
+            v-if="approvedFriends.length > 0"
             class="grid grid-cols-2 gap-(--space-3) max-[900px]:grid-cols-1"
             aria-label="友链列表"
           >
             <article
-              v-for="friend in friends"
+              v-for="friend in approvedFriends"
               :key="friend.url"
               class="group relative grid min-h-68 content-between overflow-hidden border border-line p-(--space-3) text-ink before:absolute before:inset-0 before:z-0 before:origin-left before:scale-x-0 before:bg-ink before:transition-transform before:duration-420 before:ease-[cubic-bezier(.2,.8,.2,1)] hover:text-paper hover:before:scale-x-100 focus-within:text-paper focus-within:before:scale-x-100"
             >
@@ -216,11 +324,53 @@ useHead({
                 </p>
               </div>
 
-              <AppLinkButton :href="appConfig.friends.primaryAction.href" variant="outline">
+              <AppButton variant="outline" @click="openApplyDialog">
                 {{ appConfig.friends.primaryAction.label }}
-              </AppLinkButton>
+              </AppButton>
             </div>
           </div>
+
+          <section
+            v-if="pendingFriends.length > 0"
+            class="grid gap-(--space-3) border-y border-line py-(--space-4)"
+            aria-labelledby="pending-friends-title"
+          >
+            <div class="flex flex-wrap items-end justify-between gap-(--space-2)">
+              <div class="grid gap-1">
+                <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
+                  Pending
+                </p>
+                <h2
+                  id="pending-friends-title"
+                  class="m-0 font-display text-[48px] font-normal leading-none tracking-normal max-[520px]:text-[36px]"
+                >
+                  待审核友链
+                </h2>
+              </div>
+              <p class="m-0 text-sm font-bold text-muted">
+                {{ pendingFriends.length }} 个申请
+              </p>
+            </div>
+            <div class="grid border-t border-line">
+              <article
+                v-for="friend in pendingFriends"
+                :key="friend.url"
+                class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-(--space-2) border-b border-line py-(--space-2) max-[640px]:grid-cols-1"
+              >
+                <div class="grid min-w-0 gap-1">
+                  <h3 class="m-0 truncate text-lg font-bold text-ink">
+                    {{ friend.name }}
+                  </h3>
+                  <p class="m-0 truncate text-sm text-muted">
+                    {{ friend.intro || friend.description || friend.url }}
+                  </p>
+                </div>
+                <span class="w-fit border border-line bg-code-surface px-(--space-1) py-1 text-[12px] font-bold text-muted">
+                  待审核
+                </span>
+              </article>
+            </div>
+          </section>
 
           <section
             class="grid grid-cols-[minmax(0,1fr)_minmax(240px,360px)] gap-(--space-4) max-[900px]:grid-cols-1"
@@ -237,24 +387,147 @@ useHead({
                 {{ appConfig.friends.exchangeDescription }}
               </p>
             </div>
-            <ul class="m-0 grid list-none gap-(--space-1) p-0 text-sm font-bold uppercase tracking-normal text-muted">
-              <li
-                v-for="item in appConfig.friends.exchangeItems"
-                :key="item"
-                class="flex items-center gap-(--space-1) border-b border-line py-(--space-1)"
-              >
-                <Icon
-                  name="lucide:badge-check"
-                  mode="svg"
-                  class="h-4 w-4 text-quiet"
-                  aria-hidden="true"
-                />
-                {{ item }}
-              </li>
-            </ul>
+            <div class="grid content-start gap-(--space-2)">
+              <ul class="m-0 grid list-none gap-(--space-1) p-0 text-sm font-bold uppercase tracking-normal text-muted">
+                <li
+                  v-for="item in appConfig.friends.exchangeItems"
+                  :key="item"
+                  class="flex items-center gap-(--space-1) border-b border-line py-(--space-1)"
+                >
+                  <Icon
+                    name="lucide:badge-check"
+                    mode="svg"
+                    class="h-4 w-4 text-quiet"
+                    aria-hidden="true"
+                  />
+                  {{ item }}
+                </li>
+              </ul>
+              <AppButton variant="solid" @click="openApplyDialog">
+                <Icon name="lucide:send" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                申请友链
+              </AppButton>
+            </div>
           </section>
         </div>
       </div>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="applyOpen"
+        class="fixed inset-0 z-50 grid place-items-center bg-ink/35 px-(--space-2) py-(--space-4)"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="friend-apply-title"
+        @click.self="closeApplyDialog"
+      >
+        <form
+          class="grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-y-auto border border-line bg-paper shadow-[0_24px_80px_rgba(0,0,0,.24)]"
+          :class="applySubmitted ? 'max-w-150 overflow-visible' : ''"
+          @submit.prevent="submitFriendApplication"
+        >
+          <div class="grid gap-(--space-2) border-b border-line p-(--space-3)">
+            <div class="flex items-start justify-between gap-(--space-2)">
+              <div class="grid gap-1">
+                <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
+                  Friend Apply
+                </p>
+                <h2
+                  id="friend-apply-title"
+                  class="m-0 font-display text-[56px] font-normal leading-none max-[520px]:text-[40px]"
+                >
+                  申请友链
+                </h2>
+              </div>
+              <AppButton variant="icon" aria-label="关闭友链申请" :disabled="applying" @click="closeApplyDialog">
+                <Icon name="lucide:x" mode="svg" class="h-5 w-5" aria-hidden="true" />
+              </AppButton>
+            </div>
+            <p class="m-0 max-w-170 text-base leading-[1.6] text-muted text-pretty">
+              提交后会进入待审核状态。重复站点、明显广告和垃圾内容会被直接拦截。
+            </p>
+          </div>
+
+          <div v-if="applySubmitted" class="grid gap-(--space-3) p-(--space-3)">
+            <div class="grid min-h-44 content-center gap-(--space-2) border-b border-line pb-(--space-3)">
+              <Icon name="lucide:circle-check" mode="svg" class="h-8 w-8 text-ink" aria-hidden="true" />
+              <p class="m-0 text-lg font-bold text-ink">
+                {{ applyMessage }}
+              </p>
+              <p class="m-0 text-base leading-[1.6] text-muted text-pretty">
+                你可以在页面的待审核友链区域看到这条申请，后台审核通过后会进入正式友链列表。
+              </p>
+            </div>
+            <div class="flex justify-end">
+              <AppButton variant="solid" @click="closeApplyDialog">
+                完成
+              </AppButton>
+            </div>
+          </div>
+
+          <div v-else class="grid gap-(--space-2) p-(--space-3)">
+            <div class="grid grid-cols-2 gap-(--space-2) max-[680px]:grid-cols-1">
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                站点名称
+                <input v-model="applyName" required maxlength="40" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                站点链接
+                <input v-model="applyUrl" required type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                图标
+                <input v-model="applyIcon" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="lucide:link 或图片 URL">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                分类
+                <input v-model="applyCategory" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                简介
+                <input v-model="applyIntro" maxlength="80" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                联系方式
+                <input v-model="applyContact" maxlength="120" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="邮箱、GitHub 或其他可联系入口">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                返链地址
+                <input v-model="applyBacklinkUrl" type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="已添加本站链接的页面，可留空">
+              </label>
+              <label class="grid gap-2 text-sm font-bold text-muted">
+                标签
+                <input v-model="applyTags" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="Blog, Design">
+              </label>
+            </div>
+            <label class="grid gap-2 text-sm font-bold text-muted">
+              描述
+              <textarea
+                v-model="applyDescription"
+                maxlength="240"
+                class="min-h-28 resize-y border border-line bg-paper px-(--space-2) py-(--space-2) text-base leading-[1.65] text-ink outline-none focus:border-ink"
+              />
+            </label>
+
+            <p v-if="applyError" class="m-0 border border-callout-danger-border bg-callout-danger-surface px-(--space-2) py-(--space-1) text-sm font-bold text-callout-danger-text">
+              {{ applyError }}
+            </p>
+            <p v-if="applyMessage" class="m-0 border border-line bg-code-surface px-(--space-2) py-(--space-1) text-sm font-bold text-muted">
+              {{ applyMessage }}
+            </p>
+          </div>
+
+          <div v-if="!applySubmitted" class="flex flex-wrap justify-end gap-(--space-1) border-t border-line p-(--space-3)">
+            <AppButton variant="outline" :disabled="applying" @click="closeApplyDialog">
+              取消
+            </AppButton>
+            <AppButton type="submit" variant="solid" :loading="applying">
+              提交申请
+            </AppButton>
+          </div>
+        </form>
+      </div>
+    </Teleport>
   </NuxtLayout>
 </template>

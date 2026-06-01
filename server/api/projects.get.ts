@@ -1,3 +1,5 @@
 export default defineEventHandler(async () => {
-  return readProjects()
+  const projects = await readProjects()
+
+  return projects.filter((project) => !project.hidden)
 })

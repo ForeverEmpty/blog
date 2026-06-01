@@ -1,4 +1,4 @@
-export type AdminPanel = 'overview' | 'articles' | 'projects' | 'friends' | 'comments'
+export type AdminPanel = 'overview' | 'articles' | 'media' | 'projects' | 'friends' | 'comments' | 'about' | 'logs'
 
 export type ManagedArticle = {
   id: string
@@ -12,8 +12,39 @@ export type ManagedArticle = {
   category: string
   published: boolean
   locked: boolean
+  pinned: boolean
   views: number
   tags: string[]
+  markdown: string
+}
+
+export type ManagedArticleVersion = ManagedArticle & {
+  versionId: string
+  action: string
+  createdAt: string
+}
+
+export type ManagedArticleAutosave = Omit<ManagedArticle, 'id' | 'path'> & {
+  updatedAt: string
+}
+
+export type ManagedAdminLog = {
+  id: string
+  action: string
+  targetType: string
+  targetId: string
+  message: string
+  payload: Record<string, unknown> | null
+  createdAt: string
+}
+
+export type ManagedMediaAsset = {
+  name: string
+  url: string
+  type: 'image' | 'video' | 'audio' | 'file'
+  mime: string
+  size: number
+  updatedAt: string
   markdown: string
 }
 
@@ -26,6 +57,11 @@ export type ManagedProject = {
   sourceUrl: string
   launchUrl: string
   tags: string[]
+  featured: boolean
+  hidden: boolean
+  order: number
+  coverUrl: string
+  updatedAt: string
 }
 
 export type ManagedFriend = {
@@ -38,6 +74,13 @@ export type ManagedFriend = {
   category: string
   status: '待审核' | '已通过' | '已拒绝'
   tags: string[]
+  contact: string
+  backlinkUrl: string
+  reviewNote: string
+  featured: boolean
+  order: number
+  submittedAt: string
+  reviewedAt: string
 }
 
 export type ManagedCommentStatus = 'approved' | 'waiting' | 'spam'
@@ -56,6 +99,12 @@ export type ManagedComment = {
   like: number
   status: ManagedCommentStatus
   createdAt: string
+}
+
+export type ManagedAboutPage = {
+  title: string
+  description: string
+  markdown: string
 }
 
 export type MarkdownPreviewBlock = {

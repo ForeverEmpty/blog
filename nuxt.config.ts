@@ -27,9 +27,13 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    adminUsername: process.env.NUXT_ADMIN_USERNAME || process.env.ADMIN_USERNAME || 'admin',
+    adminPassword: process.env.NUXT_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '',
+    adminSessionSecret: process.env.NUXT_ADMIN_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || '',
     aiSummaryApiKey: process.env.NUXT_AI_SUMMARY_API_KEY || process.env.AI_SUMMARY_API_KEY || process.env.OPENAI_API_KEY || '',
     aiSummaryEndpoint: process.env.NUXT_AI_SUMMARY_ENDPOINT || process.env.AI_SUMMARY_ENDPOINT || process.env.OPENAI_API_ENDPOINT || '',
     public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://localhost:3000',
       walineServerURL: process.env.NUXT_PUBLIC_WALINE_SERVER_URL || 'http://localhost:8360'
     }
   },
@@ -37,8 +41,21 @@ export default defineNuxtConfig({
     '@nuxt/icon',
     '@pinia/nuxt',
     '@nuxt/image',
-    '@nuxt/content'
+    '@nuxt/content',
+    '@nuxtjs/robots'
   ],
+  robots: {
+    sitemap: ['/sitemap.xml'],
+    disallow: ['/admin', '/admin/**', '/api/admin', '/api/admin/**'],
+    robotsEnabledValue: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+    robotsDisabledValue: 'noindex, nofollow',
+    credits: false
+  },
+  routeRules: {
+    '/admin': { robots: 'noindex, nofollow' },
+    '/admin/**': { robots: 'noindex, nofollow' },
+    '/api/admin/**': { robots: 'noindex, nofollow' }
+  },
   icon: {
     serverBundle: {
       collections: ['lucide']

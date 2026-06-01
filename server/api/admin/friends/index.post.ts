@@ -16,20 +16,42 @@ export default defineEventHandler(async (event) => {
   }
 
   const friends = await readFriends()
+  const existing = typeof body.id === 'string' && body.id
+    ? friends.find((friend) => friend.id === body.id)
+    : undefined
+  const status = body.status === '已通过' || body.status === '已拒绝' ? body.status : '待审核'
+  const now = new Date().toISOString()
   const friend = {
-    id: body.id || createId('friend', body.name),
-    name: body.name,
-    url: body.url,
-    icon: typeof body.icon === 'string' ? body.icon : '',
-    intro: typeof body.intro === 'string' ? body.intro : '',
-    description: body.description || '',
-    category: body.category || '个人站点',
-    status: body.status || '待审核',
-    tags: Array.isArray(body.tags) ? body.tags.map(String) : []
+    id: existing?.id || createId('friend', body.name),
+    name: body.name.trim(),
+    url: body.url.trim(),
+    icon: typeof body.icon === 'string' ? body.icon.trim() : '',
+    intro: typeof body.intro === 'string' ? body.intro.trim() : '',
+    description: typeof body.description === 'string' ? body.description.trim() : '',
+    category: typeof body.category === 'string' && body.category.trim() ? body.category.trim() : '个人站点',
+    status,
+    tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean) : [],
+    contact: typeof body.contact === 'string' ? body.contact.trim() : '',
+    backlinkUrl: typeof body.backlinkUrl === 'string' ? body.backlinkUrl.trim() : '',
+    reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote.trim() : '',
+    featured: body.featured === true,
+    order: Number.isFinite(Number(body.order)) ? Number(body.order) : existing?.order ?? ((friends.length + 1) * 10),
+    submittedAt: existing?.submittedAt || now,
+    reviewedAt: status === '待审核' ? '' : (existing?.reviewedAt || now)
   }
   const nextFriends = [friend, ...friends.filter((item) => item.id !== friend.id)]
 
   await writeFriends(nextFriends)
+  await writeAdminLog({
+    action: friends.some((item) => item.id === friend.id) ? 'friend.update' : 'friend.create',
+    targetType: 'friend',
+    targetId: friend.id,
+    message: `保存友链：${friend.name}`,
+    payload: {
+      url: friend.url,
+      status: friend.status
+    }
+  }).catch(() => {})
 
   return friend
 })

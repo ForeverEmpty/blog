@@ -17,13 +17,12 @@ const searchOpen = ref(false)
 const { data: siteSearchArticles } = await useAsyncData('site-search-articles', () =>
   queryCollection('blog')
     .where('published', '=', true)
-    .where('locked', '=', false)
-    .order('date', 'DESC')
     .all(),
   {
     default: () => []
   }
 )
+const sortedSiteSearchArticles = computed(() => sortArticles(siteSearchArticles.value))
 const { data: siteSearchProjects } = await useAsyncData('site-search-projects', () =>
   $fetch<LayoutSearchProject[]>('/api/projects'),
   {
@@ -77,7 +76,7 @@ const { data: siteSearchProjects } = await useAsyncData('site-search-projects', 
 
     <SiteSearchDialog
       :open="searchOpen"
-      :articles="siteSearchArticles"
+      :articles="sortedSiteSearchArticles"
       :projects="siteSearchProjects"
       @close="searchOpen = false"
     />
