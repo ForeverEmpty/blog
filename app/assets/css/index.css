@@ -245,32 +245,85 @@ html.theme-is-transitioning * {
   transition-timing-function: cubic-bezier(.16, 1, .3, 1);
 }
 
+html.theme-disable-transitions,
+html.theme-disable-transitions * {
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
+html.theme-view-transitioning::view-transition-group(root),
+html.theme-view-transitioning::view-transition-image-pair(root),
 html.theme-view-transitioning::view-transition-old(root),
 html.theme-view-transitioning::view-transition-new(root) {
-  animation-duration: 620ms;
-  animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  animation: none;
   mix-blend-mode: normal;
 }
 
 html.theme-view-transitioning::view-transition-old(root) {
-  animation: none;
   z-index: 0;
 }
 
 html.theme-view-transitioning::view-transition-new(root) {
-  animation-name: theme-sphere-spread;
+  clip-path: circle(160vmax at var(--theme-transition-x, 50vw) var(--theme-transition-y, 50vh));
   z-index: 1;
 }
 
-@keyframes theme-sphere-spread {
-  from {
-    clip-path: circle(0 at var(--theme-transition-x, 50vw) var(--theme-transition-y, 50vh));
-  }
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 220ms cubic-bezier(.16, 1, .3, 1),
+    transform 220ms cubic-bezier(.16, 1, .3, 1),
+    filter 220ms cubic-bezier(.16, 1, .3, 1);
+}
 
-  to {
-    clip-path: circle(160vmax at var(--theme-transition-x, 50vw) var(--theme-transition-y, 50vh));
-  }
+.page-enter-from {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(14px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateY(-10px);
+}
+
+.page-enter-to,
+.page-leave-from {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+
+.dialog-enter-active {
+  transition: opacity 160ms ease-out;
+}
+
+.dialog-leave-active {
+  transition: opacity 120ms ease-in;
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
+.dialog-enter-active .dialog-panel {
+  transition:
+    opacity 180ms cubic-bezier(.16, 1, .3, 1),
+    transform 180ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.dialog-leave-active .dialog-panel {
+  transition:
+    opacity 120ms ease-in,
+    transform 120ms ease-in;
+}
+
+.dialog-enter-from .dialog-panel,
+.dialog-leave-to .dialog-panel {
+  opacity: 0;
+  transform: translateY(12px) scale(.98);
 }
 
 @media (prefers-reduced-motion: reduce) {

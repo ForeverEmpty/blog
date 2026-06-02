@@ -8,9 +8,15 @@ const props = defineProps<{
     pending: number
     approved: number
     rejected: number
+    unchecked: number
+    ok: number
+    warning: number
+    error: number
   }
   selectedFriendId: string
   saving: boolean
+  inspecting: boolean
+  inspectingFriendIds: string[]
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +25,8 @@ const emit = defineEmits<{
   saveFriend: []
   setFriendStatus: [friend: ManagedFriend, status: ManagedFriend['status']]
   toggleFriendFeatured: [friend: ManagedFriend]
+  inspectFriend: [friend: ManagedFriend]
+  inspectFriends: [friends: ManagedFriend[]]
   deleteFriend: [friend: ManagedFriend]
 }>()
 
@@ -39,13 +47,20 @@ const friendOrder = defineModel<number>('friendOrder', { required: true })
 const friendStatus = defineModel<ManagedFriend['status']>('friendStatus', { required: true })
 
 const isImageIcon = (icon?: string) => Boolean(icon && (/^(https?:)?\/\//.test(icon) || icon.startsWith('/')))
-const draftTags = computed(() => (
-  friendTags.value
-    .split(',')
+const parseFriendTags = (value: string) => (
+  value
+    .split(/\r?\n|,/)
     .map((tag) => tag.trim())
     .filter(Boolean)
+)
+const draftTags = computed(() => parseFriendTags(friendTags.value))
+const friendCategorySuggestions = computed(() => (
+  Array.from(new Set(props.friends.map((friend) => friend.category)))
+    .filter(Boolean)
 ))
+const friendTagSuggestions = computed(() => Array.from(new Set(props.friends.flatMap((friend) => friend.tags))).filter(Boolean))
 const selectedFriend = computed(() => props.friends.find((friend) => friend.id === props.selectedFriendId))
+const isFriendInspecting = (friend: ManagedFriend) => props.inspectingFriendIds.includes(friend.id)
 
 const statusClass = (status: ManagedFriend['status']) => {
   if (status === '已通过') {
@@ -57,6 +72,54 @@ const statusClass = (status: ManagedFriend['status']) => {
   }
 
   return 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'
+}
+
+const checkStatusLabel = (status: ManagedFriend['checkStatus']) => {
+  if (status === 'ok') {
+    return '正常'
+  }
+
+  if (status === 'warning') {
+    return '提醒'
+  }
+
+  if (status === 'error') {
+    return '异常'
+  }
+
+  return '未巡检'
+}
+
+const checkStatusClass = (status: ManagedFriend['checkStatus']) => {
+  if (status === 'ok') {
+    return 'border-callout-success-border bg-callout-success-surface text-callout-success-text'
+  }
+
+  if (status === 'warning') {
+    return 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'
+  }
+
+  if (status === 'error') {
+    return 'border-callout-danger-border bg-callout-danger-surface text-callout-danger-text'
+  }
+
+  return 'border-line bg-code-surface text-muted'
+}
+
+const backlinkLabel = (friend: ManagedFriend) => {
+  if (!friend.backlinkUrl) {
+    return '未配置返链'
+  }
+
+  if (friend.backlinkFound === true) {
+    return '返链已确认'
+  }
+
+  if (friend.backlinkFound === false) {
+    return '返链未确认'
+  }
+
+  return '返链未巡检'
 }
 
 const formatTime = (value: string) => {
@@ -74,6 +137,7 @@ const formatTime = (value: string) => {
     minute: '2-digit'
   }).format(date)
 }
+
 </script>
 
 <template>
@@ -89,6 +153,15 @@ const formatTime = (value: string) => {
           </h2>
         </div>
         <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton
+            variant="outline"
+            :loading="props.inspecting"
+            :disabled="props.saving || props.inspecting || props.friends.length === 0"
+            @click="emit('inspectFriends', props.friends)"
+          >
+            <Icon name="lucide:radar" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            巡检当前列表
+          </AppButton>
           <AppButton variant="outline" :disabled="props.saving" @click="emit('createFriend')">
             <Icon name="lucide:file-plus-2" mode="svg" class="h-4 w-4" aria-hidden="true" />
             新建友链
@@ -97,6 +170,25 @@ const formatTime = (value: string) => {
             <Icon name="lucide:save" mode="svg" class="h-4 w-4" aria-hidden="true" />
             保存友链
           </AppButton>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-4 border border-line max-[720px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="友链巡检统计">
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">正常</span>
+          <span class="font-display text-[32px] leading-none text-callout-success-text">{{ props.stats.ok }}</span>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[720px]:border-r-0 max-[720px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">提醒</span>
+          <span class="font-display text-[32px] leading-none text-callout-warning-text">{{ props.stats.warning }}</span>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">异常</span>
+          <span class="font-display text-[32px] leading-none text-callout-danger-text">{{ props.stats.error }}</span>
+        </div>
+        <div class="grid gap-1 p-(--space-2)">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">未巡检</span>
+          <span class="font-display text-[32px] leading-none text-muted">{{ props.stats.unchecked }}</span>
         </div>
       </div>
 
@@ -151,8 +243,11 @@ const formatTime = (value: string) => {
           @click="emit('selectFriend', friend)"
         >
           <span class="truncate text-sm font-bold">{{ friend.name }}</span>
-          <span class="truncate text-[12px] text-muted" :class="friend.id === props.selectedFriendId ? 'text-ink' : ''">
-            {{ friend.status }} / {{ friend.category }} / #{{ friend.order }}
+          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="friend.id === props.selectedFriendId ? 'text-ink' : ''">
+            <span class="truncate">{{ friend.status }} / {{ friend.category }} / #{{ friend.order }}</span>
+            <span class="border px-1 py-0.5 text-[11px] font-bold leading-none" :class="checkStatusClass(friend.checkStatus)">
+              {{ checkStatusLabel(friend.checkStatus) }}
+            </span>
           </span>
         </button>
         <p v-if="props.friends.length === 0" class="m-0 border-b border-line px-(--space-2) py-(--space-3) text-sm text-muted">
@@ -161,7 +256,7 @@ const formatTime = (value: string) => {
       </aside>
 
       <div class="grid gap-(--space-3)">
-        <div class="grid grid-cols-2 gap-(--space-2) max-[760px]:grid-cols-1">
+        <div class="grid grid-cols-2 items-start gap-(--space-2) max-[760px]:grid-cols-1">
           <label class="grid gap-2 text-sm font-bold text-muted">
             站点名称
             <input v-model="friendName" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
@@ -178,10 +273,11 @@ const formatTime = (value: string) => {
             图标
             <input v-model="friendIcon" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="lucide:globe-2 或图片 URL">
           </label>
-          <label class="grid gap-2 text-sm font-bold text-muted">
-            分类
-            <input v-model="friendCategory" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
-          </label>
+          <TaxonomyCategoryInput
+            v-model="friendCategory"
+            :suggestions="friendCategorySuggestions"
+            clear-label="清空友链分类"
+          />
           <label class="grid gap-2 text-sm font-bold text-muted">
             状态
             <select v-model="friendStatus" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
@@ -194,10 +290,11 @@ const formatTime = (value: string) => {
             简介
             <input v-model="friendIntro" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
           </label>
-          <label class="grid gap-2 text-sm font-bold text-muted">
-            标签
-            <input v-model="friendTags" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="Blog, Design">
-          </label>
+          <TaxonomyTagInput
+            v-model="friendTags"
+            :suggestions="friendTagSuggestions"
+            remove-label-prefix="删除友链标签"
+          />
           <label class="grid gap-2 text-sm font-bold text-muted">
             联系方式
             <input v-model="friendContact" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
@@ -273,6 +370,9 @@ const formatTime = (value: string) => {
                 <span class="border px-1 py-0.5" :class="statusClass(friend.status)">
                   {{ friend.status }}
                 </span>
+                <span class="border px-1 py-0.5" :class="checkStatusClass(friend.checkStatus)">
+                  {{ checkStatusLabel(friend.checkStatus) }}
+                </span>
                 {{ friend.category }} / #{{ friend.order }}
               </p>
             </div>
@@ -297,6 +397,12 @@ const formatTime = (value: string) => {
             <p v-if="friend.reviewedAt" class="m-0">审核：{{ formatTime(friend.reviewedAt) }}</p>
             <p v-if="friend.contact" class="m-0 break-words">联系：{{ friend.contact }}</p>
             <p v-if="friend.backlinkUrl" class="m-0 break-words">返链：{{ friend.backlinkUrl }}</p>
+            <p class="m-0 break-words">巡检：{{ friend.checkedAt ? formatTime(friend.checkedAt) : '未巡检' }}</p>
+            <p v-if="friend.responseStatus || friend.responseTimeMs" class="m-0 break-words">
+              HTTP：{{ friend.responseStatus || '未知' }} / {{ friend.responseTimeMs || 0 }}ms
+            </p>
+            <p class="m-0 break-words">返链结果：{{ backlinkLabel(friend) }}</p>
+            <p v-if="friend.checkMessage" class="m-0 break-words">巡检说明：{{ friend.checkMessage }}</p>
             <p v-if="friend.reviewNote" class="m-0 break-words">备注：{{ friend.reviewNote }}</p>
           </div>
         </div>
@@ -313,6 +419,16 @@ const formatTime = (value: string) => {
           <AppButton size="sm" variant="outline" :disabled="props.saving" @click="emit('toggleFriendFeatured', friend)">
             <Icon :name="friend.featured ? 'lucide:star-off' : 'lucide:star'" mode="svg" class="h-4 w-4" aria-hidden="true" />
             {{ friend.featured ? '取消置顶' : '置顶' }}
+          </AppButton>
+          <AppButton
+            size="sm"
+            variant="outline"
+            :loading="isFriendInspecting(friend)"
+            :disabled="props.saving || props.inspecting || isFriendInspecting(friend)"
+            @click="emit('inspectFriend', friend)"
+          >
+            <Icon name="lucide:radar" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            巡检
           </AppButton>
           <AppButton size="sm" variant="outline" :disabled="props.saving" @click="emit('selectFriend', friend)">
             <Icon name="lucide:pencil" mode="svg" class="h-4 w-4" aria-hidden="true" />

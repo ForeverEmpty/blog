@@ -28,28 +28,34 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim() : ''
+  const launchUrl = typeof body.launchUrl === 'string' ? body.launchUrl.trim() : ''
+  const normalizedSourceUrl = sourceUrl || launchUrl
+  const normalizedLaunchUrl = launchUrl || sourceUrl
+  const shouldResetInspection = !existing ||
+    existing.sourceUrl !== normalizedSourceUrl ||
+    existing.launchUrl !== normalizedLaunchUrl
   const project = {
     id: existing?.id || createId('project', name),
     name,
     description: typeof body.description === 'string' ? body.description.trim() : '',
     status: typeof body.status === 'string' && body.status.trim() ? body.status.trim() : '草稿',
     category: typeof body.category === 'string' && body.category.trim() ? body.category.trim() : '项目',
-    sourceUrl: typeof body.sourceUrl === 'string' ? body.sourceUrl.trim() : '',
-    launchUrl: typeof body.launchUrl === 'string' ? body.launchUrl.trim() : '',
+    sourceUrl: normalizedSourceUrl,
+    launchUrl: normalizedLaunchUrl,
     tags,
     featured: body.featured === true,
     hidden: body.hidden === true,
     order: Number.isFinite(Number(body.order)) ? Number(body.order) : existing?.order ?? ((projects.length + 1) * 10),
     coverUrl: typeof body.coverUrl === 'string' ? body.coverUrl.trim() : '',
-    updatedAt: new Date().toISOString()
-  }
-
-  if (!project.sourceUrl) {
-    project.sourceUrl = project.launchUrl
-  }
-
-  if (!project.launchUrl) {
-    project.launchUrl = project.sourceUrl
+    updatedAt: new Date().toISOString(),
+    checkStatus: shouldResetInspection ? 'unchecked' : existing.checkStatus,
+    checkedAt: shouldResetInspection ? '' : existing.checkedAt,
+    checkMessage: shouldResetInspection ? '' : existing.checkMessage,
+    launchStatus: shouldResetInspection ? undefined : existing.launchStatus,
+    launchTimeMs: shouldResetInspection ? undefined : existing.launchTimeMs,
+    sourceStatus: shouldResetInspection ? undefined : existing.sourceStatus,
+    sourceTimeMs: shouldResetInspection ? undefined : existing.sourceTimeMs
   }
 
   const nextProjects = [project, ...projects.filter((item) => item.id !== project.id)]

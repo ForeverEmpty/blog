@@ -5,6 +5,7 @@ const allowedStatuses = new Set(['approved', 'waiting', 'spam'])
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id') || ''
   const body = await readBody<{ status?: WalineCommentStatus }>(event)
+  const rules = getCommentModerationRules(event)
 
   if (!allowedStatuses.has(String(body.status))) {
     throw createError({
@@ -13,7 +14,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const comment = await updateWalineCommentStatus(id, body.status as WalineCommentStatus)
+  const comment = withCommentModeration(
+    await updateWalineCommentStatus(id, body.status as WalineCommentStatus),
+    rules
+  )
 
   await writeAdminLog({
     action: 'comment.update',

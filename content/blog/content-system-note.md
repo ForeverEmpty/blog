@@ -5,7 +5,8 @@ date: 2026-05-23
 author: Chanko
 authorUrl: /about
 category: "开发记录"
-views: 0
+views: 2
+workflowStatus: published
 published: true
 locked: false
 pinned: false
@@ -13,7 +14,6 @@ tags:
   - "Nuxt Content"
   - ChankoBlog
 ---
-
 
 
 

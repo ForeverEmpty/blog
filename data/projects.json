@@ -11,6 +11,18 @@
       "Tomodoro",
       "Timer",
       "GitHub Pages"
-    ]
+    ],
+    "featured": true,
+    "hidden": false,
+    "order": 10,
+    "coverUrl": "",
+    "updatedAt": "2026-06-02T02:30:42.446Z",
+    "checkStatus": "ok",
+    "checkedAt": "2026-06-02T02:29:59.657Z",
+    "checkMessage": "访问地址 HTTP 200，耗时 1356ms；源码地址 HTTP 200，耗时 1554ms",
+    "launchStatus": 200,
+    "launchTimeMs": 1356,
+    "sourceStatus": 200,
+    "sourceTimeMs": 1554
   }
 ]

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import pg from 'pg'
 
+import { resolveArticleWorkflowStatus } from './adminStorage'
 import type { AdminArticle } from './adminStorage'
 
 export type AdminLogEntry = {
@@ -30,9 +31,11 @@ type VersionRow = {
   title: string
   description: string
   date: string
+  scheduled_at: string | null
   author: string
   author_url: string | null
   category: string
+  workflow_status: string | null
   published: boolean
   locked: boolean
   pinned: boolean
@@ -80,7 +83,7 @@ const withAdminClient = async <T>(handler: (client: pg.Client) => Promise<T>) =>
   }
 }
 
-const ensureAdminDatabase = async () => {
+export const ensureAdminDatabase = async () => {
   schemaReady ||= withAdminClient(async (client) => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_logs (
@@ -99,9 +102,11 @@ const ensureAdminDatabase = async () => {
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         date TEXT NOT NULL,
+        scheduled_at TEXT,
         author TEXT NOT NULL,
         author_url TEXT,
         category TEXT NOT NULL,
+        workflow_status TEXT NOT NULL DEFAULT 'draft',
         published BOOLEAN NOT NULL,
         locked BOOLEAN NOT NULL,
         pinned BOOLEAN NOT NULL,
@@ -120,9 +125,11 @@ const ensureAdminDatabase = async () => {
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         date TEXT NOT NULL,
+        scheduled_at TEXT,
         author TEXT NOT NULL,
         author_url TEXT,
         category TEXT NOT NULL,
+        workflow_status TEXT NOT NULL DEFAULT 'draft',
         published BOOLEAN NOT NULL,
         locked BOOLEAN NOT NULL,
         pinned BOOLEAN NOT NULL,
@@ -134,6 +141,18 @@ const ensureAdminDatabase = async () => {
 
       CREATE INDEX IF NOT EXISTS admin_logs_created_at
         ON admin_logs (created_at DESC);
+
+      ALTER TABLE article_versions
+        ADD COLUMN IF NOT EXISTS workflow_status TEXT NOT NULL DEFAULT 'draft';
+
+      ALTER TABLE article_autosaves
+        ADD COLUMN IF NOT EXISTS workflow_status TEXT NOT NULL DEFAULT 'draft';
+
+      ALTER TABLE article_versions
+        ADD COLUMN IF NOT EXISTS scheduled_at TEXT;
+
+      ALTER TABLE article_autosaves
+        ADD COLUMN IF NOT EXISTS scheduled_at TEXT;
     `)
   })
 
@@ -157,23 +176,29 @@ const parseTags = (value: string[] | string) => {
   }
 }
 
-const toArticleBase = (row: VersionRow | AutosaveRow): AdminArticle => ({
-  id: row.slug,
-  slug: row.slug,
-  path: `/blog/${row.slug}`,
-  title: row.title,
-  description: row.description,
-  date: row.date,
-  author: row.author,
-  authorUrl: row.author_url || undefined,
-  category: row.category,
-  published: row.published === true,
-  locked: row.locked === true,
-  pinned: row.pinned === true,
-  views: Math.max(0, Number(row.views) || 0),
-  tags: parseTags(row.tags),
-  markdown: row.markdown
-})
+const toArticleBase = (row: VersionRow | AutosaveRow): AdminArticle => {
+  const workflowStatus = resolveArticleWorkflowStatus(row.workflow_status, row.published, row.scheduled_at)
+
+  return {
+    id: row.slug,
+    slug: row.slug,
+    path: `/blog/${row.slug}`,
+    title: row.title,
+    description: row.description,
+    date: row.date,
+    scheduledAt: row.scheduled_at || undefined,
+    author: row.author,
+    authorUrl: row.author_url || undefined,
+    category: row.category,
+    workflowStatus,
+    published: workflowStatus === 'published',
+    locked: row.locked === true,
+    pinned: row.pinned === true,
+    views: Math.max(0, Number(row.views) || 0),
+    tags: parseTags(row.tags),
+    markdown: row.markdown
+  }
+}
 
 const toVersion = (row: VersionRow): AdminArticleVersion => ({
   ...toArticleBase(row),
@@ -182,22 +207,28 @@ const toVersion = (row: VersionRow): AdminArticleVersion => ({
   createdAt: toIso(row.created_at)
 })
 
-const toAutosave = (row: AutosaveRow): AdminArticleAutosave => ({
-  slug: row.slug,
-  title: row.title,
-  description: row.description,
-  date: row.date,
-  author: row.author,
-  authorUrl: row.author_url || undefined,
-  category: row.category,
-  published: row.published === true,
-  locked: row.locked === true,
-  pinned: row.pinned === true,
-  views: Math.max(0, Number(row.views) || 0),
-  tags: parseTags(row.tags),
-  markdown: row.markdown,
-  updatedAt: toIso(row.updated_at)
-})
+const toAutosave = (row: AutosaveRow): AdminArticleAutosave => {
+  const workflowStatus = resolveArticleWorkflowStatus(row.workflow_status, row.published, row.scheduled_at)
+
+  return {
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    date: row.date,
+    scheduledAt: row.scheduled_at || undefined,
+    author: row.author,
+    authorUrl: row.author_url || undefined,
+    category: row.category,
+    workflowStatus,
+    published: workflowStatus === 'published',
+    locked: row.locked === true,
+    pinned: row.pinned === true,
+    views: Math.max(0, Number(row.views) || 0),
+    tags: parseTags(row.tags),
+    markdown: row.markdown,
+    updatedAt: toIso(row.updated_at)
+  }
+}
 
 const toLog = (row: LogRow): AdminLogEntry => {
   let payload: Record<string, unknown> | null = null
@@ -268,10 +299,10 @@ export const createArticleVersion = async (article: AdminArticle, action: string
   const id = randomUUID()
   const result = await withAdminClient((client) => client.query<VersionRow>(
     `INSERT INTO article_versions (
-       id, slug, title, description, date, author, author_url, category,
-       published, locked, pinned, views, tags, markdown, action
+       id, slug, title, description, date, scheduled_at, author, author_url, category,
+       workflow_status, published, locked, pinned, views, tags, markdown, action
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16, $17)
      RETURNING *`,
     [
       id,
@@ -279,9 +310,11 @@ export const createArticleVersion = async (article: AdminArticle, action: string
       article.title,
       article.description,
       article.date,
+      article.scheduledAt || null,
       article.author,
       article.authorUrl || null,
       article.category,
+      article.workflowStatus,
       article.published,
       article.locked,
       article.pinned,
@@ -330,17 +363,19 @@ export const saveArticleAutosave = async (article: AdminArticle) => {
 
   const result = await withAdminClient((client) => client.query<AutosaveRow>(
     `INSERT INTO article_autosaves (
-       slug, title, description, date, author, author_url, category,
-       published, locked, pinned, views, tags, markdown
+       slug, title, description, date, scheduled_at, author, author_url, category,
+       workflow_status, published, locked, pinned, views, tags, markdown
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
      ON CONFLICT (slug) DO UPDATE SET
        title = EXCLUDED.title,
        description = EXCLUDED.description,
        date = EXCLUDED.date,
+       scheduled_at = EXCLUDED.scheduled_at,
        author = EXCLUDED.author,
        author_url = EXCLUDED.author_url,
        category = EXCLUDED.category,
+       workflow_status = EXCLUDED.workflow_status,
        published = EXCLUDED.published,
        locked = EXCLUDED.locked,
        pinned = EXCLUDED.pinned,
@@ -354,9 +389,11 @@ export const saveArticleAutosave = async (article: AdminArticle) => {
       article.title,
       article.description,
       article.date,
+      article.scheduledAt || null,
       article.author,
       article.authorUrl || null,
       article.category,
+      article.workflowStatus,
       article.published,
       article.locked,
       article.pinned,

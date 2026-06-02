@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: false
+})
+
 const appConfig = useAppConfig()
 const router = useRouter()
 const route = useRoute()

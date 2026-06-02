@@ -9,11 +9,17 @@ const props = defineProps<{
     visible: number
     hidden: number
     featured: number
+    unchecked: number
+    ok: number
+    warning: number
+    error: number
   }
   projectStatuses: string[]
   projectCategories: string[]
   selectedProjectId: string
   saving: boolean
+  inspecting: boolean
+  inspectingProjectIds: string[]
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +28,8 @@ const emit = defineEmits<{
   saveProject: []
   toggleProjectFeatured: [project: ManagedProject]
   toggleProjectHidden: [project: ManagedProject]
+  inspectProject: [project: ManagedProject]
+  inspectProjects: [projects: ManagedProject[]]
   moveProject: [project: ManagedProject, direction: 'up' | 'down']
   deleteProject: [project: ManagedProject]
 }>()
@@ -43,12 +51,14 @@ const projectHidden = defineModel<boolean>('projectHidden', { required: true })
 const projectOrder = defineModel<number>('projectOrder', { required: true })
 const projectCoverUrl = defineModel<string>('projectCoverUrl', { required: true })
 
-const draftTags = computed(() => (
-  projectTags.value
-    .split(',')
+const parseProjectTags = (value: string) => (
+  value
+    .split(/\r?\n|,/)
     .map((tag) => tag.trim())
     .filter(Boolean)
-))
+)
+const draftTags = computed(() => parseProjectTags(projectTags.value))
+const projectTagSuggestions = computed(() => Array.from(new Set(props.allProjects.flatMap((project) => project.tags))))
 const selectedProject = computed(() => (
   props.allProjects.find((project) => project.id === props.selectedProjectId)
 ))
@@ -57,6 +67,7 @@ const hasSourceUrl = computed(() => projectSourceUrl.value.trim().length > 0)
 const filteredProjectIds = computed(() => new Set(props.projects.map((project) => project.id)))
 
 const isCurrentFiltered = (project: ManagedProject) => filteredProjectIds.value.has(project.id)
+const isProjectInspecting = (project: ManagedProject) => props.inspectingProjectIds.includes(project.id)
 const statusClass = (project: ManagedProject) => {
   if (project.hidden) {
     return 'border-line bg-code-surface text-muted'
@@ -68,6 +79,55 @@ const statusClass = (project: ManagedProject) => {
 
   return 'border-line bg-paper text-ink'
 }
+
+const checkStatusLabel = (status: ManagedProject['checkStatus']) => {
+  if (status === 'ok') {
+    return '正常'
+  }
+
+  if (status === 'warning') {
+    return '提醒'
+  }
+
+  if (status === 'error') {
+    return '异常'
+  }
+
+  return '未巡检'
+}
+
+const checkStatusClass = (status: ManagedProject['checkStatus']) => {
+  if (status === 'ok') {
+    return 'border-callout-success-border bg-callout-success-surface text-callout-success-text'
+  }
+
+  if (status === 'warning') {
+    return 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'
+  }
+
+  if (status === 'error') {
+    return 'border-callout-danger-border bg-callout-danger-surface text-callout-danger-text'
+  }
+
+  return 'border-line bg-code-surface text-muted'
+}
+
+const formatTime = (value: string) => {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value || '未记录'
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
 </script>
 
 <template>
@@ -83,6 +143,15 @@ const statusClass = (project: ManagedProject) => {
           </h2>
         </div>
         <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton
+            variant="outline"
+            :loading="props.inspecting"
+            :disabled="props.saving || props.inspecting || props.projects.length === 0"
+            @click="emit('inspectProjects', props.projects)"
+          >
+            <Icon name="lucide:radar" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            巡检当前列表
+          </AppButton>
           <AppButton variant="outline" :disabled="props.saving" @click="emit('createProject')">
             <Icon name="lucide:file-plus-2" mode="svg" class="h-4 w-4" aria-hidden="true" />
             新建项目
@@ -91,6 +160,25 @@ const statusClass = (project: ManagedProject) => {
             <Icon name="lucide:save" mode="svg" class="h-4 w-4" aria-hidden="true" />
             保存项目
           </AppButton>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-4 border border-line max-[720px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="项目巡检统计">
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">正常</span>
+          <span class="font-display text-[32px] leading-none text-callout-success-text">{{ props.projectStats.ok }}</span>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[720px]:border-r-0 max-[720px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">提醒</span>
+          <span class="font-display text-[32px] leading-none text-callout-warning-text">{{ props.projectStats.warning }}</span>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">异常</span>
+          <span class="font-display text-[32px] leading-none text-callout-danger-text">{{ props.projectStats.error }}</span>
+        </div>
+        <div class="grid gap-1 p-(--space-2)">
+          <span class="text-[12px] font-bold uppercase tracking-normal text-muted">未巡检</span>
+          <span class="font-display text-[32px] leading-none text-muted">{{ props.projectStats.unchecked }}</span>
         </div>
       </div>
 
@@ -173,8 +261,11 @@ const statusClass = (project: ManagedProject) => {
           @click="emit('selectProject', project)"
         >
           <span class="truncate text-sm font-bold">{{ project.name }}</span>
-          <span class="truncate text-[12px] text-muted" :class="project.id === props.selectedProjectId ? 'text-ink' : ''">
-            {{ project.featured ? '精选' : '普通' }} / {{ project.hidden ? '隐藏' : '公开' }} / #{{ project.order }}
+          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="project.id === props.selectedProjectId ? 'text-ink' : ''">
+            <span class="truncate">{{ project.featured ? '精选' : '普通' }} / {{ project.hidden ? '隐藏' : '公开' }} / #{{ project.order }}</span>
+            <span class="border px-1 py-0.5 text-[11px] font-bold leading-none" :class="checkStatusClass(project.checkStatus)">
+              {{ checkStatusLabel(project.checkStatus) }}
+            </span>
           </span>
         </button>
         <p v-if="props.allProjects.length === 0" class="m-0 border-b border-line px-(--space-2) py-(--space-3) text-sm text-muted">
@@ -183,7 +274,7 @@ const statusClass = (project: ManagedProject) => {
       </aside>
 
       <div class="grid gap-(--space-3)">
-        <div class="grid grid-cols-2 gap-(--space-2) max-[760px]:grid-cols-1">
+        <div class="grid grid-cols-2 items-start gap-(--space-2) max-[760px]:grid-cols-1">
           <label class="grid gap-2 text-sm font-bold text-muted">
             项目名称
             <input v-model="projectName" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
@@ -196,10 +287,11 @@ const statusClass = (project: ManagedProject) => {
             状态
             <input v-model="projectStatus" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="已上线 / 维护中 / 草稿">
           </label>
-          <label class="grid gap-2 text-sm font-bold text-muted">
-            分类
-            <input v-model="projectCategory" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="工具 / 应用 / 实验">
-          </label>
+          <TaxonomyCategoryInput
+            v-model="projectCategory"
+            :suggestions="props.projectCategories"
+            clear-label="清空项目分类"
+          />
           <label class="grid gap-2 text-sm font-bold text-muted">
             源码地址
             <input v-model="projectSourceUrl" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
@@ -212,10 +304,12 @@ const statusClass = (project: ManagedProject) => {
             封面地址
             <input v-model="projectCoverUrl" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="/media/project-cover.webp">
           </label>
-          <label class="grid gap-2 text-sm font-bold text-muted max-[760px]:col-span-1 md:col-span-2">
-            标签
-            <input v-model="projectTags" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="Vue, Nuxt, Tool">
-          </label>
+          <TaxonomyTagInput
+            v-model="projectTags"
+            class="max-[760px]:col-span-1 md:col-span-2"
+            :suggestions="projectTagSuggestions"
+            remove-label-prefix="删除项目标签"
+          />
         </div>
 
         <div class="flex flex-wrap gap-(--space-1)">
@@ -286,6 +380,9 @@ const statusClass = (project: ManagedProject) => {
             <span class="border px-1 py-0.5" :class="statusClass(project)">
               {{ project.hidden ? '隐藏' : '公开' }}
             </span>
+            <span class="border px-1 py-0.5" :class="checkStatusClass(project.checkStatus)">
+              {{ checkStatusLabel(project.checkStatus) }}
+            </span>
             <span>{{ project.featured ? '精选' : '普通' }} / {{ project.status }} / {{ project.category }} / #{{ project.order }}</span>
           </p>
           <h3 class="m-0 break-words font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
@@ -303,6 +400,16 @@ const statusClass = (project: ManagedProject) => {
               {{ tag }}
             </li>
           </ul>
+          <div class="grid gap-1 text-[12px] text-muted">
+            <p class="m-0">巡检：{{ project.checkedAt ? formatTime(project.checkedAt) : '未巡检' }}</p>
+            <p v-if="project.launchStatus || project.launchTimeMs" class="m-0">
+              访问地址：{{ project.launchStatus || '未知' }} / {{ project.launchTimeMs || 0 }}ms
+            </p>
+            <p v-if="project.sourceStatus || project.sourceTimeMs" class="m-0">
+              源码地址：{{ project.sourceStatus || '未知' }} / {{ project.sourceTimeMs || 0 }}ms
+            </p>
+            <p v-if="project.checkMessage" class="m-0 break-words">巡检说明：{{ project.checkMessage }}</p>
+          </div>
         </div>
         <div class="flex flex-wrap justify-end gap-(--space-1) max-[860px]:justify-start">
           <AppButton variant="outline" :disabled="props.saving || index === 0" @click="emit('moveProject', project, 'up')">
@@ -320,6 +427,15 @@ const statusClass = (project: ManagedProject) => {
           <AppButton variant="outline" :disabled="props.saving" @click="emit('toggleProjectHidden', project)">
             <Icon :name="project.hidden ? 'lucide:eye' : 'lucide:eye-off'" mode="svg" class="h-4 w-4" aria-hidden="true" />
             {{ project.hidden ? '公开' : '隐藏' }}
+          </AppButton>
+          <AppButton
+            variant="outline"
+            :loading="isProjectInspecting(project)"
+            :disabled="props.saving || props.inspecting || isProjectInspecting(project)"
+            @click="emit('inspectProject', project)"
+          >
+            <Icon name="lucide:radar" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            巡检
           </AppButton>
           <AppLinkButton v-if="project.launchUrl" :href="project.launchUrl" variant="outline">
             访问

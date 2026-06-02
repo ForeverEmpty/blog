@@ -9,9 +9,11 @@ export type AdminArticle = {
   title: string
   description: string
   date: string
+  scheduledAt?: string
   author: string
   authorUrl?: string
   category: string
+  workflowStatus: ArticleWorkflowStatus
   published: boolean
   locked: boolean
   pinned: boolean
@@ -34,6 +36,13 @@ export type AdminProject = {
   order: number
   coverUrl: string
   updatedAt: string
+  checkStatus: 'unchecked' | 'ok' | 'warning' | 'error'
+  checkedAt: string
+  checkMessage: string
+  launchStatus?: number
+  launchTimeMs?: number
+  sourceStatus?: number
+  sourceTimeMs?: number
 }
 
 export type AdminFriend = {
@@ -53,6 +62,13 @@ export type AdminFriend = {
   order: number
   submittedAt: string
   reviewedAt: string
+  checkStatus: 'unchecked' | 'ok' | 'warning' | 'error'
+  checkedAt: string
+  checkMessage: string
+  responseStatus?: number
+  responseTimeMs?: number
+  backlinkFound?: boolean
+  backlinkCheckedAt?: string
 }
 
 export type AdminAboutPage = {
@@ -68,7 +84,7 @@ export type BlogComment = {
   website?: string
   content: string
   createdAt: string
-  status: 'published'
+  status: 'published' | 'waiting' | 'spam'
 }
 
 export type ArticleViewRecord = {
@@ -80,6 +96,16 @@ export type ArticleViewRecord = {
 export type ArticleViews = Record<string, ArticleViewRecord>
 
 type Frontmatter = Record<string, unknown>
+type ArticleWorkflowStatus = 'draft' | 'review' | 'scheduled' | 'published' | 'archived'
+type ArticleVisibilityCandidate = {
+  workflowStatus?: ArticleWorkflowStatus | string
+  published?: boolean | number | string
+  scheduledAt?: string
+  meta?: {
+    workflowStatus?: ArticleWorkflowStatus | string
+    scheduledAt?: string
+  }
+}
 
 const contentDir = () => resolve(process.cwd(), 'content', 'blog')
 const contentRootDir = () => resolve(process.cwd(), 'content')
@@ -89,6 +115,7 @@ const projectsPath = () => resolve(dataDir(), 'projects.json')
 const friendsPath = () => resolve(dataDir(), 'friends.json')
 const commentsPath = () => resolve(dataDir(), 'comments.json')
 const viewsPath = () => resolve(dataDir(), 'views.json')
+const workflowStatuses = new Set<ArticleWorkflowStatus>(['draft', 'review', 'scheduled', 'published', 'archived'])
 
 const ensureDataDir = async () => {
   await mkdir(dataDir(), { recursive: true })
@@ -113,6 +140,73 @@ export const slugify = (value: string) => {
 
   return slug || `article-${Date.now()}`
 }
+
+const isPublishedValue = (value: unknown) => (
+  value === true || value === 1 || value === 'true' || value === '1'
+)
+
+export const normalizeArticleWorkflowStatus = (value: unknown, published?: unknown): ArticleWorkflowStatus => {
+  if (typeof value === 'string' && workflowStatuses.has(value as ArticleWorkflowStatus)) {
+    return value as ArticleWorkflowStatus
+  }
+
+  return isPublishedValue(published) ? 'published' : 'draft'
+}
+
+const normalizeScheduledAt = (value: unknown) => (
+  typeof value === 'string' && value.trim() ? value.trim() : undefined
+)
+
+const isScheduledAtReadyValue = (value: unknown) => {
+  const scheduledAt = normalizeScheduledAt(value)
+
+  if (!scheduledAt) {
+    return false
+  }
+
+  const timestamp = Date.parse(scheduledAt)
+
+  return !Number.isNaN(timestamp) && timestamp <= Date.now()
+}
+
+export const resolveArticleWorkflowStatus = (
+  value: unknown,
+  published?: unknown,
+  scheduledAt?: unknown
+): ArticleWorkflowStatus => {
+  const workflowStatus = normalizeArticleWorkflowStatus(value, published)
+
+  if (workflowStatus === 'scheduled' && isScheduledAtReadyValue(scheduledAt)) {
+    return 'published'
+  }
+
+  return workflowStatus
+}
+
+const getArticleWorkflowStatus = (article: ArticleVisibilityCandidate) => (
+  article.workflowStatus || article.meta?.workflowStatus
+)
+
+const getArticleScheduledAt = (article: ArticleVisibilityCandidate) => (
+  article.scheduledAt || article.meta?.scheduledAt
+)
+
+export const isAdminScheduledArticleReady = (article: ArticleVisibilityCandidate) => {
+  return isScheduledAtReadyValue(getArticleScheduledAt(article))
+}
+
+export const isArticlePublic = (article: ArticleVisibilityCandidate) => {
+  const workflowStatus = getArticleWorkflowStatus(article)
+
+  if (workflowStatus) {
+    return workflowStatus === 'published' ||
+      (workflowStatus === 'scheduled' && isAdminScheduledArticleReady(article))
+  }
+
+  return isPublishedValue(article.published)
+}
+
+const isArticleMarkedPublished = (workflowStatus: ArticleWorkflowStatus) => workflowStatus === 'published'
 
 const articleFilePath = (slug: string) => {
   assertSafeSlug(slug)
@@ -182,6 +276,13 @@ export const parseArticleMarkdown = (raw: string, fallbackSlug: string): AdminAr
     }
   }
 
+  const scheduledAt = normalizeScheduledAt(frontmatter.scheduledAt)
+  const workflowStatus = resolveArticleWorkflowStatus(
+    frontmatter.workflowStatus,
+    frontmatter.published !== false,
+    scheduledAt
+  )
+
   return {
     id: fallbackSlug,
     slug: fallbackSlug,
@@ -189,10 +290,12 @@ export const parseArticleMarkdown = (raw: string, fallbackSlug: string): AdminAr
     title: String(frontmatter.title || fallbackSlug),
     description: String(frontmatter.description || ''),
     date: String(frontmatter.date || new Date().toISOString().slice(0, 10)),
+    scheduledAt,
     author: String(frontmatter.author || 'Chanko'),
     authorUrl: typeof frontmatter.authorUrl === 'string' ? frontmatter.authorUrl : undefined,
     category: String(frontmatter.category || '未分类'),
-    published: frontmatter.published !== false,
+    workflowStatus,
+    published: isArticleMarkedPublished(workflowStatus),
     locked: frontmatter.locked === true,
     pinned: frontmatter.pinned === true,
     views: typeof frontmatter.views === 'number' ? frontmatter.views : 0,
@@ -222,6 +325,10 @@ export const stringifyArticleMarkdown = (article: AdminArticle) => {
     `author: ${quoteFrontmatterValue(article.author || 'Chanko')}`
   ]
 
+  if (article.scheduledAt) {
+    lines.push(`scheduledAt: ${quoteFrontmatterValue(article.scheduledAt)}`)
+  }
+
   if (article.authorUrl) {
     lines.push(`authorUrl: ${quoteFrontmatterValue(article.authorUrl)}`)
   }
@@ -229,7 +336,8 @@ export const stringifyArticleMarkdown = (article: AdminArticle) => {
   lines.push(
     `category: ${quoteFrontmatterValue(article.category || '未分类')}`,
     `views: ${Math.max(0, Number(article.views) || 0)}`,
-    `published: ${article.published !== false}`,
+    `workflowStatus: ${quoteFrontmatterValue(article.workflowStatus || 'draft')}`,
+    `published: ${isArticleMarkedPublished(article.workflowStatus)}`,
     `locked: ${article.locked === true}`,
     `pinned: ${article.pinned === true}`,
     'tags:'
@@ -304,6 +412,25 @@ export const saveAboutPage = async (payload: Partial<AdminAboutPage>) => {
   return about
 }
 
+const promoteReadyScheduledArticle = async (slug: string, raw: string, article: AdminArticle) => {
+  const wasScheduled = /\bworkflowStatus:\s*['"]?scheduled['"]?(?:\s|$)/.test(raw)
+
+  if (!wasScheduled || article.workflowStatus !== 'published') {
+    return article
+  }
+
+  const promotedArticle: AdminArticle = {
+    ...article,
+    scheduledAt: undefined,
+    workflowStatus: 'published',
+    published: true
+  }
+
+  await writeFile(articleFilePath(slug), stringifyArticleMarkdown(promotedArticle), 'utf8')
+
+  return promotedArticle
+}
+
 export const readArticles = async () => {
   await mkdir(contentDir(), { recursive: true })
 
@@ -315,7 +442,7 @@ export const readArticles = async () => {
       .map(async (filename) => {
         const slug = filename.replace(/\.md$/, '')
         const raw = await readFile(articleFilePath(slug), 'utf8')
-        const article = parseArticleMarkdown(raw, slug)
+        const article = await promoteReadyScheduledArticle(slug, raw, parseArticleMarkdown(raw, slug))
 
         return {
           ...article,
@@ -330,7 +457,7 @@ export const readArticles = async () => {
 export const readArticle = async (slug: string) => {
   const views = await readArticleViews()
   const raw = await readFile(articleFilePath(slug), 'utf8')
-  const article = parseArticleMarkdown(raw, slug)
+  const article = await promoteReadyScheduledArticle(slug, raw, parseArticleMarkdown(raw, slug))
 
   return {
     ...article,
@@ -344,6 +471,11 @@ export const saveArticle = async (payload: Partial<AdminArticle> & { slug?: stri
     .then((raw) => parseArticleMarkdown(raw, slug))
     .catch(() => null)
 
+  const payloadScheduledAt = payload.workflowStatus === 'scheduled'
+    ? normalizeScheduledAt(payload.scheduledAt || existing?.scheduledAt)
+    : undefined
+  const workflowStatus = resolveArticleWorkflowStatus(payload.workflowStatus, payload.published, payloadScheduledAt)
+  const scheduledAt = workflowStatus === 'scheduled' ? payloadScheduledAt : undefined
   const article: AdminArticle = {
     id: slug,
     slug,
@@ -351,10 +483,12 @@ export const saveArticle = async (payload: Partial<AdminArticle> & { slug?: stri
     title: payload.title,
     description: payload.description || '',
     date: payload.date || new Date().toISOString().slice(0, 10),
+    scheduledAt,
     author: payload.author || existing?.author || 'Chanko',
     authorUrl: payload.authorUrl || existing?.authorUrl || '/about',
     category: payload.category || '未分类',
-    published: payload.published !== false,
+    workflowStatus,
+    published: isArticleMarkedPublished(workflowStatus),
     locked: payload.locked === true,
     pinned: payload.pinned === true,
     views: Math.max(0, Number(payload.views ?? existing?.views ?? 0)),
@@ -385,9 +519,21 @@ const writeJsonFile = async <T>(filePath: string, value: T) => {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
 }
 
+const normalizeProjectCheckStatus = (status: unknown): AdminProject['checkStatus'] => {
+  if (status === 'ok' || status === 'warning' || status === 'error') {
+    return status
+  }
+
+  return 'unchecked'
+}
+
 const normalizeProject = (project: Partial<AdminProject>, index: number): AdminProject => {
   const sourceUrl = String(project.sourceUrl || '').trim()
   const launchUrl = String(project.launchUrl || '').trim()
+  const launchStatus = Number(project.launchStatus)
+  const launchTimeMs = Number(project.launchTimeMs)
+  const sourceStatus = Number(project.sourceStatus)
+  const sourceTimeMs = Number(project.sourceTimeMs)
 
   return {
     id: String(project.id || createId('project', String(project.name || 'project'))),
@@ -402,7 +548,14 @@ const normalizeProject = (project: Partial<AdminProject>, index: number): AdminP
     hidden: project.hidden === true,
     order: Number.isFinite(Number(project.order)) ? Number(project.order) : (index + 1) * 10,
     coverUrl: String(project.coverUrl || '').trim(),
-    updatedAt: String(project.updatedAt || new Date().toISOString())
+    updatedAt: String(project.updatedAt || new Date().toISOString()),
+    checkStatus: normalizeProjectCheckStatus(project.checkStatus),
+    checkedAt: String(project.checkedAt || ''),
+    checkMessage: String(project.checkMessage || ''),
+    launchStatus: Number.isFinite(launchStatus) ? launchStatus : undefined,
+    launchTimeMs: Number.isFinite(launchTimeMs) ? launchTimeMs : undefined,
+    sourceStatus: Number.isFinite(sourceStatus) ? sourceStatus : undefined,
+    sourceTimeMs: Number.isFinite(sourceTimeMs) ? sourceTimeMs : undefined
   }
 }
 
@@ -433,8 +586,18 @@ const normalizeFriendStatus = (status: unknown): AdminFriend['status'] => {
   return '待审核'
 }
 
+const normalizeFriendCheckStatus = (status: unknown): AdminFriend['checkStatus'] => {
+  if (status === 'ok' || status === 'warning' || status === 'error') {
+    return status
+  }
+
+  return 'unchecked'
+}
+
 const normalizeFriend = (friend: Partial<AdminFriend>, index: number): AdminFriend => {
   const now = new Date().toISOString()
+  const responseStatus = Number(friend.responseStatus)
+  const responseTimeMs = Number(friend.responseTimeMs)
 
   return {
     id: String(friend.id || createId('friend', String(friend.name || 'friend'))),
@@ -452,7 +615,14 @@ const normalizeFriend = (friend: Partial<AdminFriend>, index: number): AdminFrie
     featured: friend.featured === true,
     order: Number.isFinite(Number(friend.order)) ? Number(friend.order) : (index + 1) * 10,
     submittedAt: String(friend.submittedAt || now),
-    reviewedAt: String(friend.reviewedAt || '')
+    reviewedAt: String(friend.reviewedAt || ''),
+    checkStatus: normalizeFriendCheckStatus(friend.checkStatus),
+    checkedAt: String(friend.checkedAt || ''),
+    checkMessage: String(friend.checkMessage || ''),
+    responseStatus: Number.isFinite(responseStatus) ? responseStatus : undefined,
+    responseTimeMs: Number.isFinite(responseTimeMs) ? responseTimeMs : undefined,
+    backlinkFound: typeof friend.backlinkFound === 'boolean' ? friend.backlinkFound : undefined,
+    backlinkCheckedAt: String(friend.backlinkCheckedAt || '')
   }
 }
 

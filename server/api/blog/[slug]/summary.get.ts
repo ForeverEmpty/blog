@@ -178,6 +178,15 @@ export default defineEventHandler(async (event) => {
 
   const slug = getRouterParam(event, "slug") || "";
   const markdown = await readArticleMarkdown(slug);
+  const article = await readArticle(slug);
+
+  if (!isArticlePublic(article)) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Article Markdown Not Found",
+    });
+  }
+
   const contentHash = markdownHash(markdown);
   const cacheKey = `${slug}/${contentHash}`;
   const storage = useStorage("aiSummary");

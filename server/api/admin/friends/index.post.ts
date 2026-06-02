@@ -21,10 +21,13 @@ export default defineEventHandler(async (event) => {
     : undefined
   const status = body.status === '已通过' || body.status === '已拒绝' ? body.status : '待审核'
   const now = new Date().toISOString()
+  const url = body.url.trim()
+  const backlinkUrl = typeof body.backlinkUrl === 'string' ? body.backlinkUrl.trim() : ''
+  const shouldResetInspection = !existing || existing.url !== url || existing.backlinkUrl !== backlinkUrl
   const friend = {
     id: existing?.id || createId('friend', body.name),
     name: body.name.trim(),
-    url: body.url.trim(),
+    url,
     icon: typeof body.icon === 'string' ? body.icon.trim() : '',
     intro: typeof body.intro === 'string' ? body.intro.trim() : '',
     description: typeof body.description === 'string' ? body.description.trim() : '',
@@ -32,12 +35,19 @@ export default defineEventHandler(async (event) => {
     status,
     tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean) : [],
     contact: typeof body.contact === 'string' ? body.contact.trim() : '',
-    backlinkUrl: typeof body.backlinkUrl === 'string' ? body.backlinkUrl.trim() : '',
+    backlinkUrl,
     reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote.trim() : '',
     featured: body.featured === true,
     order: Number.isFinite(Number(body.order)) ? Number(body.order) : existing?.order ?? ((friends.length + 1) * 10),
     submittedAt: existing?.submittedAt || now,
-    reviewedAt: status === '待审核' ? '' : (existing?.reviewedAt || now)
+    reviewedAt: status === '待审核' ? '' : (existing?.reviewedAt || now),
+    checkStatus: shouldResetInspection ? 'unchecked' : existing.checkStatus,
+    checkedAt: shouldResetInspection ? '' : existing.checkedAt,
+    checkMessage: shouldResetInspection ? '' : existing.checkMessage,
+    responseStatus: shouldResetInspection ? undefined : existing.responseStatus,
+    responseTimeMs: shouldResetInspection ? undefined : existing.responseTimeMs,
+    backlinkFound: shouldResetInspection ? undefined : existing.backlinkFound,
+    backlinkCheckedAt: shouldResetInspection ? '' : existing.backlinkCheckedAt
   }
   const nextFriends = [friend, ...friends.filter((item) => item.id !== friend.id)]
 

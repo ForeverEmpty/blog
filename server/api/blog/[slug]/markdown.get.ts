@@ -23,6 +23,15 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const article = await readArticle(slug);
+
+    if (!isArticlePublic(article)) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Article Markdown Not Found",
+      });
+    }
+
     const markdown = await readFile(markdownPath, "utf8");
 
     return { markdown };

@@ -2,7 +2,7 @@ export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug') || ''
   const article = (await readArticles()).find((item) => item.slug === slug)
 
-  if (!article || article.published === false) {
+  if (!article || !isArticlePublic(article)) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Article Not Found'

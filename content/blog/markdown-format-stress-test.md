@@ -6,6 +6,7 @@ author: Chanko
 authorUrl: /about
 category: "测试记录"
 views: 0
+workflowStatus: published
 published: true
 locked: false
 pinned: false
@@ -14,8 +15,6 @@ tags:
   - Test
   - "Nuxt Content"
 ---
-
-
 
 # 一级标题用于验证正文中的 H1
 

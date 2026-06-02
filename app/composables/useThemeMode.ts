@@ -1,8 +1,11 @@
+import { nextTick } from 'vue'
 import type { ThemeMode } from '~/utils/themeMode'
 import {
   applyThemeModeToDocument,
   getInitialThemeMode,
   getStoredThemeMode,
+  isThemeMode,
+  themeModeCookieName,
   themeModeStorageKey
 } from '~/utils/themeMode'
 
@@ -14,6 +17,7 @@ type ThemeOption = {
 }
 
 const transitionClass = 'theme-is-transitioning'
+const disableTransitionClass = 'theme-disable-transitions'
 const viewTransitionClass = 'theme-view-transitioning'
 const transitionDuration = 520
 
@@ -28,9 +32,14 @@ const prefersReducedMotion = () => (
 )
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => {
+  startViewTransition?: (callback: () => void | Promise<void>) => {
+    ready: Promise<void>
     finished: Promise<void>
   }
+}
+
+type ViewTransitionAnimationOptions = KeyframeAnimationOptions & {
+  pseudoElement?: string
 }
 
 type ThemeTransitionOrigin = {
@@ -63,6 +72,13 @@ const applyTransitionOrigin = (origin: ThemeTransitionOrigin) => {
   root.style.setProperty('--theme-transition-y', `${origin.y}px`)
 }
 
+const getTransitionRadius = (origin: ThemeTransitionOrigin) => {
+  const farthestX = Math.max(origin.x, window.innerWidth - origin.x)
+  const farthestY = Math.max(origin.y, window.innerHeight - origin.y)
+
+  return Math.ceil(Math.hypot(farthestX, farthestY)) + 96
+}
+
 const getResolvedTheme = (mode: ThemeMode) => {
   if (!import.meta.client || mode !== 'system') {
     return mode
@@ -72,9 +88,17 @@ const getResolvedTheme = (mode: ThemeMode) => {
 }
 
 export const useThemeMode = () => {
-  const themeMode = useState<ThemeMode>('chanko-theme-mode', getInitialThemeMode)
+  const themeModeCookie = useCookie<ThemeMode | undefined>(themeModeCookieName, {
+    maxAge: 60 * 60 * 24 * 365,
+    path: '/',
+    sameSite: 'lax'
+  })
+  const themeMode = useState<ThemeMode>('chanko-theme-mode', () => (
+    isThemeMode(themeModeCookie.value) ? themeModeCookie.value : getInitialThemeMode()
+  ))
   let systemThemeQuery: MediaQueryList | undefined
   let transitionTimer: number | undefined
+  let transitionId = 0
 
   const selectedIndex = computed(() => (
     Math.max(0, themeOptions.findIndex((option) => option.mode === themeMode.value))
@@ -104,27 +128,36 @@ export const useThemeMode = () => {
 
   const commitThemeMode = (mode: ThemeMode) => {
     themeMode.value = mode
+    themeModeCookie.value = mode
     localStorage.setItem(themeModeStorageKey, mode)
     applyThemeMode(mode)
   }
 
-  const finishTransition = () => {
+  const finishTransition = (id = transitionId) => {
+    if (id !== transitionId) {
+      return
+    }
+
     const root = document.documentElement
 
     window.clearTimeout(transitionTimer)
     root.classList.remove(transitionClass)
+    root.classList.remove(disableTransitionClass)
     root.classList.remove(viewTransitionClass)
   }
 
   const runThemeTransition = (mode: ThemeMode, event?: Event) => {
     const root = document.documentElement
+    const origin = getTransitionOrigin(event)
+    const currentTransitionId = transitionId + 1
 
+    transitionId = currentTransitionId
     window.clearTimeout(transitionTimer)
-    applyTransitionOrigin(getTransitionOrigin(event))
+    applyTransitionOrigin(origin)
 
     if (prefersReducedMotion()) {
       commitThemeMode(mode)
-      finishTransition()
+      finishTransition(currentTransitionId)
       return
     }
 
@@ -132,15 +165,45 @@ export const useThemeMode = () => {
 
     if (viewTransitionDocument.startViewTransition) {
       root.classList.add(viewTransitionClass)
-      viewTransitionDocument.startViewTransition(() => {
+      root.classList.add(disableTransitionClass)
+
+      const transition = viewTransitionDocument.startViewTransition(async () => {
         commitThemeMode(mode)
-      }).finished.finally(finishTransition)
+        await nextTick()
+      })
+
+      transition.ready
+        .then(() => {
+          if (currentTransitionId !== transitionId) {
+            return transition.finished
+          }
+
+          const radius = getTransitionRadius(origin)
+          const animation = root.animate(
+            {
+              clipPath: [
+                `circle(0px at ${origin.x}px ${origin.y}px)`,
+                `circle(${radius}px at ${origin.x}px ${origin.y}px)`
+              ]
+            },
+            {
+              duration: 620,
+              easing: 'cubic-bezier(.22, 1, .36, 1)',
+              fill: 'both',
+              pseudoElement: '::view-transition-new(root)'
+            } as ViewTransitionAnimationOptions
+          )
+
+          return Promise.allSettled([animation.finished, transition.finished])
+        })
+        .catch(() => transition.finished)
+        .finally(() => finishTransition(currentTransitionId))
       return
     }
 
     root.classList.add(transitionClass)
     commitThemeMode(mode)
-    transitionTimer = window.setTimeout(finishTransition, transitionDuration)
+    transitionTimer = window.setTimeout(() => finishTransition(currentTransitionId), transitionDuration)
   }
 
   const setThemeMode = (mode: ThemeMode, event?: Event) => {
@@ -158,7 +221,11 @@ export const useThemeMode = () => {
   }
 
   onMounted(() => {
-    themeMode.value = getStoredThemeMode()
+    const storedThemeMode = getStoredThemeMode()
+    const nextThemeMode = isThemeMode(themeModeCookie.value) ? themeModeCookie.value : storedThemeMode
+
+    themeMode.value = nextThemeMode
+    themeModeCookie.value = nextThemeMode
     applyThemeMode()
 
     systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -166,9 +233,11 @@ export const useThemeMode = () => {
   })
 
   onBeforeUnmount(() => {
+    transitionId += 1
     window.clearTimeout(transitionTimer)
     systemThemeQuery?.removeEventListener('change', syncSystemTheme)
     document.documentElement.classList.remove(transitionClass)
+    document.documentElement.classList.remove(disableTransitionClass)
     document.documentElement.classList.remove(viewTransitionClass)
   })
 

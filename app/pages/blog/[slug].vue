@@ -4,53 +4,60 @@ const route = useRoute();
 const slug = computed(() => String(route.params.slug));
 const articlePath = computed(() => `/blog/${slug.value}`);
 
-const { data: article } = await useAsyncData(`blog-${slug.value}`, () =>
-  queryCollection("blog").path(articlePath.value).first(),
+const { data: article, pending: articlePending, error: articleError } = await useAsyncData(
+  "blog-article-detail",
+  () => queryCollection("blog").path(articlePath.value).first(),
+  {
+    default: () => null,
+    watch: [articlePath],
+  },
 );
 const { data: articleSiblings } = await useAsyncData("blog-siblings", () =>
   queryCollection("blog")
-    .where("published", "=", true)
     .all(),
   {
     default: () => [],
   },
 );
 
-if (!article.value) {
-  throw createError({
-    statusCode: 404,
-    statusMessage: "Article Not Found",
-  });
-}
-
-if (article.value.published === false) {
-  throw createError({
-    statusCode: 404,
-    statusMessage: "Article Not Found",
-  });
-}
+const hasArticle = computed(() => Boolean(article.value && isPublicArticle(article.value)));
+const articleEmptyDescription = computed(() => (
+  articleError.value
+    ? "读取文章时出现问题，可以返回目录重新选择。"
+    : "这篇文章可能尚未发布、已移除，或当前地址输入有误。"
+));
 
 const { data: articleViewStats } = await useAsyncData(
-  `blog-${slug.value}-views`,
-  () => $fetch<{ slug: string; views: number }>(`/api/blog/${encodeURIComponent(slug.value)}/views`),
+  "blog-article-views",
+  () => (
+    hasArticle.value
+      ? $fetch<{ slug: string; views: number }>(`/api/blog/${encodeURIComponent(slug.value)}/views`)
+      : Promise.resolve({
+          slug: slug.value,
+          views: 0,
+        })
+  ),
   {
     default: () => ({
       slug: slug.value,
-      views: Number(article.value.views) || 0,
+      views: Number(article.value?.views) || 0,
     }),
+    watch: [slug, hasArticle],
   },
 );
 
-const isArticleLocked = computed(() => article.value.locked === true);
+const isArticleLocked = computed(() => article.value?.locked === true);
 const articleViews = ref(articleViewStats.value.views);
-const articleSiblingsSorted = computed(() => sortArticles(articleSiblings.value));
-const articleTocLinks = useContentTocLinks(() => article.value);
+const articleSiblingsSorted = computed(() => sortArticles(articleSiblings.value).filter(isPublicArticle));
+const articleTocLinks = useContentTocLinks(() => (hasArticle.value ? article.value : null));
 const tocLinks = computed(() => (
   isArticleLocked.value ? [] : articleTocLinks.value
 ));
-const readingStats = useContentReadingStats(() => article.value);
+const readingStats = useContentReadingStats(() => (hasArticle.value ? article.value : null));
 const currentArticleIndex = computed(() => (
-  articleSiblingsSorted.value.findIndex((item) => item.path === article.value.path)
+  article.value
+    ? articleSiblingsSorted.value.findIndex((item) => item.path === article.value?.path)
+    : -1
 ));
 const previousArticle = computed(() => (
   currentArticleIndex.value > 0
@@ -136,7 +143,7 @@ const copyArticleMarkdown = async () => {
   }
 };
 const recordCurrentArticleView = async () => {
-  if (!import.meta.client) {
+  if (!import.meta.client || !hasArticle.value) {
     return;
   }
 
@@ -150,7 +157,7 @@ const recordCurrentArticleView = async () => {
 
     articleViews.value = result.views;
   } catch {
-    articleViews.value = Math.max(articleViews.value, Number(article.value.views) || 0);
+    articleViews.value = Math.max(articleViews.value, Number(article.value?.views) || 0);
   }
 };
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -222,6 +229,10 @@ const normalizeMinimarkNode = (node: unknown): unknown | null => {
   return [tag, props, ...normalizedChildren];
 };
 const articleRenderValue = computed(() => {
+  if (!article.value) {
+    return null;
+  }
+
   const body = article.value.body;
 
   if (!body) {
@@ -253,6 +264,10 @@ const articleRenderValue = computed(() => {
   };
 });
 const articleStyleBlocks = computed(() => {
+  if (!article.value) {
+    return [];
+  }
+
   const body = article.value.body;
 
   if (!body) {
@@ -280,6 +295,10 @@ const articleStyleBlocks = computed(() => {
     }));
 });
 const articleTitleClass = computed(() => {
+  if (!article.value) {
+    return "text-[132px] leading-[0.95] max-[1100px]:text-[88px] max-[520px]:text-[56px]";
+  }
+
   const titleLength = article.value.title.length;
 
   if (titleLength > 64) {
@@ -297,34 +316,43 @@ const articleTitleClass = computed(() => {
   return "text-[132px] leading-[0.95] max-[1100px]:text-[88px] max-[520px]:text-[56px]";
 });
 
-useSiteSeo({
-  title: article.value.title,
-  description: article.value.description,
-  path: article.value.path,
-  type: "article",
-  noindex: isArticleLocked.value,
-  jsonLd: {
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    headline: article.value.title,
+if (hasArticle.value && article.value) {
+  useSiteSeo({
+    title: article.value.title,
     description: article.value.description,
-    datePublished: article.value.date,
-    dateModified: article.value.date,
-    author: {
-      "@type": "Person",
-      name: article.value.author,
-      url: article.value.authorUrl ? useAbsoluteSiteUrl(article.value.authorUrl) : useAbsoluteSiteUrl("/about"),
+    path: article.value.path,
+    type: "article",
+    noindex: isArticleLocked.value,
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: article.value.title,
+      description: article.value.description,
+      datePublished: article.value.date,
+      dateModified: article.value.date,
+      author: {
+        "@type": "Person",
+        name: article.value.author,
+        url: article.value.authorUrl ? useAbsoluteSiteUrl(article.value.authorUrl) : useAbsoluteSiteUrl("/about"),
+      },
+      publisher: {
+        "@type": "Person",
+        name: appConfig.site.author,
+        url: useAbsoluteSiteUrl("/about"),
+      },
+      mainEntityOfPage: useAbsoluteSiteUrl(article.value.path),
+      url: useAbsoluteSiteUrl(article.value.path),
+      keywords: [article.value.category, ...article.value.tags].filter(Boolean).join(", "),
     },
-    publisher: {
-      "@type": "Person",
-      name: appConfig.site.author,
-      url: useAbsoluteSiteUrl("/about"),
-    },
-    mainEntityOfPage: useAbsoluteSiteUrl(article.value.path),
-    url: useAbsoluteSiteUrl(article.value.path),
-    keywords: [article.value.category, ...article.value.tags].filter(Boolean).join(", "),
-  },
-});
+  });
+} else {
+  useSiteSeo({
+    title: "文章暂时不可用",
+    description: articleEmptyDescription.value,
+    path: route.path,
+    noindex: true,
+  });
+}
 
 useHead({
   style: articleStyleBlocks,
@@ -344,6 +372,13 @@ onMounted(() => {
   void recordCurrentArticleView();
 });
 
+watch(
+  () => article.value?.path,
+  () => {
+    void recordCurrentArticleView();
+  },
+);
+
 onBeforeUnmount(() => {
   if (copyMarkdownTimer) {
     window.clearTimeout(copyMarkdownTimer);
@@ -352,8 +387,108 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <NuxtLayout>
+  <div>
+    <section
+      v-if="articlePending"
+      class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)_minmax(200px,280px)] border-b border-line bg-paper max-[1000px]:grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] max-[760px]:grid-cols-1"
+      aria-labelledby="article-loading-title"
+      aria-busy="true"
+    >
+      <aside
+        class="border-r border-line px-(--space-3) py-(--space-6) text-muted max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:px-(--space-2) max-[760px]:py-(--space-3)"
+        aria-label="文章信息加载中"
+      >
+        <div class="sticky top-24 grid gap-(--space-4) max-[760px]:static max-[760px]:grid-cols-[auto_1fr] max-[760px]:items-end">
+          <div class="h-4 w-18 animate-pulse bg-line" />
+          <div class="h-12 w-full max-w-42 animate-pulse bg-line max-[760px]:justify-self-end" />
+        </div>
+      </aside>
+
+      <div class="px-[clamp(var(--space-3),6vw,var(--space-12))] py-(--space-8) max-[760px]:px-(--space-2) max-[760px]:py-(--space-6)">
+        <div class="grid max-w-300 gap-(--space-8)">
+          <header class="grid gap-(--space-3)">
+            <div class="h-11 w-36 animate-pulse bg-line" />
+            <h1
+              id="article-loading-title"
+              class="m-0 max-w-260 font-display text-[88px] font-normal leading-none tracking-normal text-ink max-[760px]:text-[56px]"
+            >
+              文章加载中
+            </h1>
+            <div class="grid max-w-190 gap-(--space-1)" role="status">
+              <div class="h-5 w-full animate-pulse bg-line" />
+              <div class="h-5 w-5/6 animate-pulse bg-line" />
+            </div>
+          </header>
+
+          <div class="grid max-w-190 gap-(--space-2) border-t border-line pt-(--space-6)">
+            <div class="h-6 w-2/3 animate-pulse bg-line" />
+            <div class="h-4 w-full animate-pulse bg-line" />
+            <div class="h-4 w-11/12 animate-pulse bg-line" />
+            <div class="h-4 w-3/4 animate-pulse bg-line" />
+            <div class="mt-(--space-2) h-52 w-full animate-pulse bg-code-surface" />
+          </div>
+        </div>
+      </div>
+
+      <aside class="mr-[clamp(var(--space-3),5vw,var(--space-8))] grid content-start gap-(--space-2) py-(--space-8) max-[1000px]:hidden">
+        <div class="h-4 w-20 animate-pulse bg-line" />
+        <div class="h-3 w-full animate-pulse bg-line" />
+        <div class="h-3 w-4/5 animate-pulse bg-line" />
+        <div class="h-3 w-3/5 animate-pulse bg-line" />
+      </aside>
+    </section>
+
+    <section
+      v-else-if="!hasArticle"
+      class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
+      aria-labelledby="article-empty-title"
+    >
+      <aside
+        class="border-r border-line px-(--space-3) py-(--space-6) text-muted max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:px-(--space-2) max-[760px]:py-(--space-3)"
+        aria-label="文章状态"
+      >
+        <div class="sticky top-24 grid gap-(--space-4) max-[760px]:static max-[760px]:grid-cols-[auto_1fr] max-[760px]:items-end">
+          <p class="m-0 text-[13px] font-bold uppercase tracking-normal">
+            Article
+          </p>
+          <p class="m-0 font-display text-[64px] leading-none text-ink max-[760px]:justify-self-end max-[760px]:text-[44px]">
+            404
+          </p>
+        </div>
+      </aside>
+
+      <div class="px-[clamp(var(--space-3),6vw,var(--space-12))] py-(--space-8) max-[760px]:px-(--space-2) max-[760px]:py-(--space-6)">
+        <div class="grid max-w-230 gap-(--space-6)">
+          <div class="grid gap-(--space-3)">
+            <p class="m-0 flex items-center gap-(--space-1) text-[13px] font-bold uppercase tracking-normal text-muted">
+              <Icon name="lucide:file-question" mode="svg" class="h-4 w-4" aria-hidden="true" />
+              Empty Article
+            </p>
+            <h1
+              id="article-empty-title"
+              class="m-0 font-display text-[112px] font-normal leading-[0.95] tracking-normal text-ink text-pretty max-[1100px]:text-[80px] max-[520px]:text-[48px]"
+            >
+              文章暂时不可用
+            </h1>
+            <p class="m-0 max-w-180 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
+              {{ articleEmptyDescription }}
+            </p>
+          </div>
+
+          <div class="flex flex-wrap gap-(--space-2)">
+            <AppLinkButton href="/blog" variant="outline">
+              返回文章目录
+            </AppLinkButton>
+            <AppLinkButton href="/" variant="text">
+              返回首页
+            </AppLinkButton>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <article
+      v-else
       class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)_minmax(200px,280px)] border-b border-line bg-paper max-[1000px]:grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] max-[760px]:grid-cols-1"
       aria-labelledby="article-title"
     >
@@ -529,5 +664,5 @@ onBeforeUnmount(() => {
         label="文章目录"
       />
     </article>
-  </NuxtLayout>
+  </div>
 </template>

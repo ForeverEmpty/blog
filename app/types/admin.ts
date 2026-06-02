@@ -1,4 +1,6 @@
-export type AdminPanel = 'overview' | 'articles' | 'media' | 'projects' | 'friends' | 'comments' | 'about' | 'logs'
+export type AdminPanel = 'overview' | 'articles' | 'media' | 'projects' | 'friends' | 'comments' | 'about' | 'backup' | 'logs'
+
+export type ArticleWorkflowStatus = 'draft' | 'review' | 'scheduled' | 'published' | 'archived'
 
 export type ManagedArticle = {
   id: string
@@ -7,9 +9,11 @@ export type ManagedArticle = {
   title: string
   description: string
   date: string
+  scheduledAt?: string
   author: string
   authorUrl?: string
   category: string
+  workflowStatus: ArticleWorkflowStatus
   published: boolean
   locked: boolean
   pinned: boolean
@@ -62,6 +66,13 @@ export type ManagedProject = {
   order: number
   coverUrl: string
   updatedAt: string
+  checkStatus: 'unchecked' | 'ok' | 'warning' | 'error'
+  checkedAt: string
+  checkMessage: string
+  launchStatus?: number
+  launchTimeMs?: number
+  sourceStatus?: number
+  sourceTimeMs?: number
 }
 
 export type ManagedFriend = {
@@ -81,9 +92,42 @@ export type ManagedFriend = {
   order: number
   submittedAt: string
   reviewedAt: string
+  checkStatus: 'unchecked' | 'ok' | 'warning' | 'error'
+  checkedAt: string
+  checkMessage: string
+  responseStatus?: number
+  responseTimeMs?: number
+  backlinkFound?: boolean
+  backlinkCheckedAt?: string
 }
 
 export type ManagedCommentStatus = 'approved' | 'waiting' | 'spam'
+
+export type ManagedCommentModerationReason = {
+  id: string
+  label: string
+  detail: string
+  severity: 'review' | 'spam'
+}
+
+export type ManagedCommentModeration = {
+  enabled: boolean
+  status: ManagedCommentStatus
+  score: number
+  reasons: ManagedCommentModerationReason[]
+}
+
+export type ManagedCommentModerationRules = {
+  enabled: boolean
+  maxLinks: number
+  maxRepeatedCharacterRun: number
+  minContentLength: number
+  blockedKeywords: string[]
+  reviewKeywords: string[]
+  blockedAuthors: string[]
+  blockedEmailDomains: string[]
+  blockedIps: string[]
+}
 
 export type ManagedComment = {
   id: string
@@ -99,12 +143,50 @@ export type ManagedComment = {
   like: number
   status: ManagedCommentStatus
   createdAt: string
+  moderation?: ManagedCommentModeration
 }
 
 export type ManagedAboutPage = {
   title: string
   description: string
   markdown: string
+}
+
+export type AdminBackupFile = {
+  path: string
+  encoding: 'utf8' | 'base64'
+  content: string
+}
+
+export type AdminBackupDatabase = {
+  walineComments: Record<string, unknown>[]
+  adminLogs: Record<string, unknown>[]
+  articleVersions: Record<string, unknown>[]
+  articleAutosaves: Record<string, unknown>[]
+  errors: string[]
+}
+
+export type AdminBackupPayload = {
+  version: 1
+  app: 'ChankoBlog'
+  createdAt: string
+  files: AdminBackupFile[]
+  database?: AdminBackupDatabase
+}
+
+export type AdminBackupRestoreResult = {
+  restoredCount: number
+  restoredBytes: number
+  restorePoint: {
+    path: string
+    fileCount: number
+  }
+  database?: {
+    walineComments: number
+    adminLogs: number
+    articleVersions: number
+    articleAutosaves: number
+  }
 }
 
 export type MarkdownPreviewBlock = {
@@ -128,6 +210,16 @@ export type PreviewArticle = {
   title: string
   description: string
   date: string
+  scheduledAt?: string
   category: string
   tags: string[]
+}
+
+export type ArticlePublishCheckSeverity = 'pass' | 'warning' | 'error'
+
+export type ArticlePublishCheck = {
+  id: string
+  label: string
+  detail: string
+  severity: ArticlePublishCheckSeverity
 }

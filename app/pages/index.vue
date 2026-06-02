@@ -25,7 +25,6 @@ const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
 
 const { data: articles } = await useAsyncData("home-blog-list", () =>
   queryCollection("blog")
-    .where("published", "=", true)
     .all(),
   {
     default: () => [],
@@ -40,7 +39,7 @@ const { data: projectItems } = await useAsyncData("home-project-list", () =>
 );
 
 const projects = computed(() => projectItems.value.slice(0, 3));
-const homeArticles = computed(() => sortArticles(articles.value).slice(0, 3));
+const homeArticles = computed(() => sortArticles(articles.value).filter(isPublicArticle).slice(0, 3));
 
 useSiteSeo({
   title: appConfig.home.title,
@@ -50,7 +49,7 @@ useSiteSeo({
 </script>
 
 <template>
-  <NuxtLayout>
+  <div>
     <section
       class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(0,1fr)] content-end gap-(--space-4) px-[clamp(var(--space-3),5vw,var(--space-8))] pt-(--space-8) pb-(--space-6) max-[760px]:min-h-[calc(100vh-133px)] max-[760px]:px-(--space-2) max-[760px]:pt-(--space-6) max-[760px]:pb-(--space-4)"
       aria-labelledby="home-title"
@@ -87,5 +86,5 @@ useSiteSeo({
       :description="appConfig.home.projectIndex.description"
       :projects="projects"
     />
-  </NuxtLayout>
+  </div>
 </template>

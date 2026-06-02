@@ -28,6 +28,8 @@ export default defineEventHandler(async (event) => {
     message: existing ? `更新文章：${article.title}` : `新增文章：${article.title}`,
     payload: {
       title: article.title,
+      workflowStatus: article.workflowStatus,
+      scheduledAt: article.scheduledAt || null,
       published: article.published,
       locked: article.locked,
       pinned: article.pinned

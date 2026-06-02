@@ -29,11 +29,10 @@ useSiteSeo({
 </script>
 
 <template>
-  <NuxtLayout>
-    <section
-      class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
-      aria-labelledby="about-title"
-    >
+  <section
+    class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
+    aria-labelledby="about-title"
+  >
       <aside
         class="border-r border-line px-(--space-3) py-(--space-6) text-muted max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:px-(--space-2) max-[760px]:py-(--space-3)"
         aria-label="关于页面"
@@ -68,6 +67,5 @@ useSiteSeo({
           </div>
         </div>
       </div>
-    </section>
-  </NuxtLayout>
+  </section>
 </template>

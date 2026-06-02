@@ -6,7 +6,6 @@ const { searchContentItems } = useArticleSearch();
 
 const { data: articles } = await useAsyncData("blog-list", () =>
   queryCollection("blog")
-    .where("published", "=", true)
     .all(),
   {
     default: () => [],
@@ -14,6 +13,7 @@ const { data: articles } = await useAsyncData("blog-list", () =>
 );
 
 const sortedArticles = computed(() => sortArticles(articles.value));
+const publicArticles = computed(() => sortedArticles.value.filter(isPublicArticle));
 const queryValueList = (value: unknown) => (
   Array.isArray(value) ? value : [value]
 ).filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -36,8 +36,8 @@ const structuredSearchQuery = computed(() => [
 ].filter(Boolean).join(" "));
 const filteredArticles = computed(() => (
   structuredSearchQuery.value
-    ? searchContentItems(sortedArticles.value, structuredSearchQuery.value)
-    : sortedArticles.value
+    ? searchContentItems(publicArticles.value, structuredSearchQuery.value)
+    : publicArticles.value
 ));
 const isFiltered = computed(() => structuredSearchQuery.value.length > 0);
 const articleCount = computed(() => filteredArticles.value.length);
@@ -93,11 +93,10 @@ useSiteSeo({
 </script>
 
 <template>
-  <NuxtLayout>
-    <section
-      class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
-      aria-labelledby="blog-list-title"
-    >
+  <section
+    class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
+    aria-labelledby="blog-list-title"
+  >
       <aside
         class="border-r border-line px-(--space-3) py-(--space-6) text-muted max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:px-(--space-2) max-[760px]:py-(--space-3)"
         aria-label="文章列表状态"
@@ -218,6 +217,5 @@ useSiteSeo({
           </div>
         </div>
       </div>
-    </section>
-  </NuxtLayout>
+  </section>
 </template>

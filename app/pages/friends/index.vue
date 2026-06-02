@@ -46,10 +46,12 @@ const applyCategory = ref("个人站点");
 const applyTags = ref("");
 const applyTagList = computed(() => (
   applyTags.value
-    .split(",")
+    .split(/\r?\n|,/)
     .map((tag) => tag.trim())
     .filter(Boolean)
 ));
+const friendCategorySuggestions = computed(() => Array.from(new Set(friends.value.map((friend) => friend.category))).filter(Boolean));
+const friendTagSuggestions = computed(() => Array.from(new Set(friends.value.flatMap((friend) => friend.tags))).filter(Boolean));
 
 const resetApplyForm = () => {
   applyName.value = "";
@@ -135,7 +137,7 @@ useSiteSeo({
 </script>
 
 <template>
-  <NuxtLayout>
+  <div>
     <section
       class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] border-b border-line bg-paper max-[760px]:grid-cols-1"
       aria-labelledby="friends-title"
@@ -414,120 +416,126 @@ useSiteSeo({
     </section>
 
     <Teleport to="body">
-      <div
-        v-if="applyOpen"
-        class="fixed inset-0 z-50 grid place-items-center bg-ink/35 px-(--space-2) py-(--space-4)"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="friend-apply-title"
-        @click.self="closeApplyDialog"
-      >
-        <form
-          class="grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-y-auto border border-line bg-paper shadow-[0_24px_80px_rgba(0,0,0,.24)]"
-          :class="applySubmitted ? 'max-w-150 overflow-visible' : ''"
-          @submit.prevent="submitFriendApplication"
+      <Transition name="dialog">
+        <div
+          v-if="applyOpen"
+          class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3) backdrop-blur-[1px] max-[520px]:p-(--space-2)"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="friend-apply-title"
+          @click.self="closeApplyDialog"
         >
-          <div class="grid gap-(--space-2) border-b border-line p-(--space-3)">
-            <div class="flex items-start justify-between gap-(--space-2)">
-              <div class="grid gap-1">
-                <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
-                  Friend Apply
-                </p>
-                <h2
-                  id="friend-apply-title"
-                  class="m-0 font-display text-[56px] font-normal leading-none max-[520px]:text-[40px]"
-                >
-                  申请友链
-                </h2>
+          <form
+            class="dialog-panel grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-hidden border border-line bg-paper text-ink shadow-[12px_12px_0_var(--line)]"
+            :class="applySubmitted ? 'max-w-150' : ''"
+            @submit.prevent="submitFriendApplication"
+          >
+            <div class="grid gap-(--space-2) border-b border-line p-(--space-3)">
+              <div class="flex items-start justify-between gap-(--space-2)">
+                <div class="grid gap-1">
+                  <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
+                    Friend Apply
+                  </p>
+                  <h2
+                    id="friend-apply-title"
+                    class="m-0 font-display text-[56px] font-normal leading-none max-[520px]:text-[40px]"
+                  >
+                    申请友链
+                  </h2>
+                </div>
+                <AppButton variant="icon" aria-label="关闭友链申请" :disabled="applying" @click="closeApplyDialog">
+                  <Icon name="lucide:x" mode="svg" class="h-5 w-5" aria-hidden="true" />
+                </AppButton>
               </div>
-              <AppButton variant="icon" aria-label="关闭友链申请" :disabled="applying" @click="closeApplyDialog">
-                <Icon name="lucide:x" mode="svg" class="h-5 w-5" aria-hidden="true" />
-              </AppButton>
-            </div>
-            <p class="m-0 max-w-170 text-base leading-[1.6] text-muted text-pretty">
-              提交后会进入待审核状态。重复站点、明显广告和垃圾内容会被直接拦截。
-            </p>
-          </div>
-
-          <div v-if="applySubmitted" class="grid gap-(--space-3) p-(--space-3)">
-            <div class="grid min-h-44 content-center gap-(--space-2) border-b border-line pb-(--space-3)">
-              <Icon name="lucide:circle-check" mode="svg" class="h-8 w-8 text-ink" aria-hidden="true" />
-              <p class="m-0 text-lg font-bold text-ink">
-                {{ applyMessage }}
-              </p>
-              <p class="m-0 text-base leading-[1.6] text-muted text-pretty">
-                你可以在页面的待审核友链区域看到这条申请，后台审核通过后会进入正式友链列表。
+              <p class="m-0 max-w-170 text-base leading-[1.6] text-muted text-pretty">
+                提交后会进入待审核状态。重复站点、明显广告和垃圾内容会被直接拦截。
               </p>
             </div>
-            <div class="flex justify-end">
-              <AppButton variant="solid" @click="closeApplyDialog">
-                完成
+
+            <div class="min-h-0 overflow-y-auto">
+              <div v-if="applySubmitted" class="grid gap-(--space-3) p-(--space-3)">
+                <div class="grid min-h-44 content-center gap-(--space-2) border-b border-line pb-(--space-3)">
+                  <Icon name="lucide:circle-check" mode="svg" class="h-8 w-8 text-ink" aria-hidden="true" />
+                  <p class="m-0 text-lg font-bold text-ink">
+                    {{ applyMessage }}
+                  </p>
+                  <p class="m-0 text-base leading-[1.6] text-muted text-pretty">
+                    你可以在页面的待审核友链区域看到这条申请，后台审核通过后会进入正式友链列表。
+                  </p>
+                </div>
+                <div class="flex justify-end">
+                  <AppButton variant="solid" @click="closeApplyDialog">
+                    完成
+                  </AppButton>
+                </div>
+              </div>
+
+              <div v-else class="grid gap-(--space-2) p-(--space-3)">
+                <div class="grid grid-cols-2 gap-(--space-2) max-[680px]:grid-cols-1">
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    站点名称
+                    <input v-model="applyName" required maxlength="40" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+                  </label>
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    站点链接
+                    <input v-model="applyUrl" required type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+                  </label>
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    图标
+                    <input v-model="applyIcon" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="lucide:link 或图片 URL">
+                  </label>
+                  <TaxonomyCategoryInput
+                    v-model="applyCategory"
+                    :suggestions="friendCategorySuggestions"
+                    clear-label="清空友链分类"
+                  />
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    简介
+                    <input v-model="applyIntro" maxlength="80" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+                  </label>
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    联系方式
+                    <input v-model="applyContact" maxlength="120" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="邮箱、GitHub 或其他可联系入口">
+                  </label>
+                  <label class="grid gap-2 text-sm font-bold text-muted">
+                    返链地址
+                    <input v-model="applyBacklinkUrl" type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="已添加本站链接的页面，可留空">
+                  </label>
+                  <TaxonomyTagInput
+                    v-model="applyTags"
+                    :suggestions="friendTagSuggestions"
+                    remove-label-prefix="删除友链标签"
+                  />
+                </div>
+                <label class="grid gap-2 text-sm font-bold text-muted">
+                  描述
+                  <textarea
+                    v-model="applyDescription"
+                    maxlength="240"
+                    class="min-h-28 resize-y border border-line bg-paper px-(--space-2) py-(--space-2) text-base leading-[1.65] text-ink outline-none focus:border-ink"
+                  />
+                </label>
+
+                <p v-if="applyError" class="m-0 border border-callout-danger-border bg-callout-danger-surface px-(--space-2) py-(--space-1) text-sm font-bold text-callout-danger-text">
+                  {{ applyError }}
+                </p>
+                <p v-if="applyMessage" class="m-0 border border-line bg-code-surface px-(--space-2) py-(--space-1) text-sm font-bold text-muted">
+                  {{ applyMessage }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="!applySubmitted" class="flex flex-wrap justify-end gap-(--space-1) border-t border-line p-(--space-3)">
+              <AppButton variant="outline" :disabled="applying" @click="closeApplyDialog">
+                取消
+              </AppButton>
+              <AppButton type="submit" variant="solid" :loading="applying">
+                提交申请
               </AppButton>
             </div>
-          </div>
-
-          <div v-else class="grid gap-(--space-2) p-(--space-3)">
-            <div class="grid grid-cols-2 gap-(--space-2) max-[680px]:grid-cols-1">
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                站点名称
-                <input v-model="applyName" required maxlength="40" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                站点链接
-                <input v-model="applyUrl" required type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                图标
-                <input v-model="applyIcon" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="lucide:link 或图片 URL">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                分类
-                <input v-model="applyCategory" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                简介
-                <input v-model="applyIntro" maxlength="80" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                联系方式
-                <input v-model="applyContact" maxlength="120" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="邮箱、GitHub 或其他可联系入口">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                返链地址
-                <input v-model="applyBacklinkUrl" type="url" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="已添加本站链接的页面，可留空">
-              </label>
-              <label class="grid gap-2 text-sm font-bold text-muted">
-                标签
-                <input v-model="applyTags" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink" placeholder="Blog, Design">
-              </label>
-            </div>
-            <label class="grid gap-2 text-sm font-bold text-muted">
-              描述
-              <textarea
-                v-model="applyDescription"
-                maxlength="240"
-                class="min-h-28 resize-y border border-line bg-paper px-(--space-2) py-(--space-2) text-base leading-[1.65] text-ink outline-none focus:border-ink"
-              />
-            </label>
-
-            <p v-if="applyError" class="m-0 border border-callout-danger-border bg-callout-danger-surface px-(--space-2) py-(--space-1) text-sm font-bold text-callout-danger-text">
-              {{ applyError }}
-            </p>
-            <p v-if="applyMessage" class="m-0 border border-line bg-code-surface px-(--space-2) py-(--space-1) text-sm font-bold text-muted">
-              {{ applyMessage }}
-            </p>
-          </div>
-
-          <div v-if="!applySubmitted" class="flex flex-wrap justify-end gap-(--space-1) border-t border-line p-(--space-3)">
-            <AppButton variant="outline" :disabled="applying" @click="closeApplyDialog">
-              取消
-            </AppButton>
-            <AppButton type="submit" variant="solid" :loading="applying">
-              提交申请
-            </AppButton>
-          </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      </Transition>
     </Teleport>
-  </NuxtLayout>
+  </div>
 </template>

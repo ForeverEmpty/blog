@@ -1,6 +1,7 @@
 export type ThemeMode = 'light' | 'dark' | 'system'
 
 export const themeModeStorageKey = 'chanko-theme-mode'
+export const themeModeCookieName = 'chanko-theme-mode'
 
 export const isThemeMode = (value: string | null | undefined): value is ThemeMode => (
   value === 'light' || value === 'dark' || value === 'system'

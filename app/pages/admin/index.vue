@@ -2,18 +2,27 @@
 import type {
   AdminPanel,
   AdminPanelItem,
+  AdminBackupPayload,
+  AdminBackupRestoreResult,
   AdminStat,
+  ArticlePublishCheck,
+  ArticleWorkflowStatus,
   ManagedAdminLog,
   ManagedAboutPage,
   ManagedArticle,
   ManagedArticleAutosave,
   ManagedArticleVersion,
   ManagedComment,
+  ManagedCommentModerationRules,
   ManagedCommentStatus,
   ManagedFriend,
   ManagedMediaAsset,
   ManagedProject
 } from '~/types/admin'
+
+definePageMeta({
+  layout: false
+})
 
 const appConfig = useAppConfig()
 const route = useRoute()
@@ -215,6 +224,24 @@ const { data: sourceAdminLogs } = await useAsyncData('admin-api-logs', () =>
     default: () => []
   }
 )
+const defaultCommentModerationRules = (): ManagedCommentModerationRules => ({
+  enabled: true,
+  maxLinks: 3,
+  maxRepeatedCharacterRun: 12,
+  minContentLength: 2,
+  blockedKeywords: [],
+  reviewKeywords: [],
+  blockedAuthors: [],
+  blockedEmailDomains: [],
+  blockedIps: []
+})
+const cloneCommentModerationRules = (rules: ManagedCommentModerationRules) => JSON.parse(JSON.stringify(rules)) as ManagedCommentModerationRules
+const { data: sourceCommentModerationRules } = await useAsyncData('admin-api-comment-moderation-rules', () =>
+  adminFetch<ManagedCommentModerationRules>('/api/admin/comments/rules').catch(defaultCommentModerationRules),
+  {
+    default: defaultCommentModerationRules
+  }
+)
 const panels: AdminPanelItem[] = [
   { key: 'overview', label: '总览', icon: 'lucide:layout-dashboard' },
   { key: 'articles', label: '文章', icon: 'lucide:file-pen-line' },
@@ -223,6 +250,7 @@ const panels: AdminPanelItem[] = [
   { key: 'friends', label: '友链', icon: 'lucide:link' },
   { key: 'comments', label: '评论', icon: 'lucide:message-square-text' },
   { key: 'about', label: '关于', icon: 'lucide:user-round-pen' },
+  { key: 'backup', label: '备份', icon: 'lucide:database-backup' },
   { key: 'logs', label: '日志', icon: 'lucide:scroll-text' }
 ]
 
@@ -237,15 +265,25 @@ const aboutPreviewPending = ref(false)
 const aboutPreviewError = ref('')
 const commentsLoading = ref(false)
 const commentsError = ref('')
+const commentRulesSaving = ref(false)
+const friendInspecting = ref(false)
+const friendInspectingIds = ref<string[]>([])
+const projectInspecting = ref(false)
+const projectInspectingIds = ref<string[]>([])
 const logsLoading = ref(false)
 const logsError = ref('')
 const mediaUploading = ref(false)
 const mediaError = ref('')
+const backupLoading = ref(false)
+const backupError = ref('')
+const backupRestoreResult = ref<AdminBackupRestoreResult | null>(null)
 const autosaveStatus = ref('自动保存待命')
 let previewTimer: ReturnType<typeof setTimeout> | undefined
 let aboutPreviewTimer: ReturnType<typeof setTimeout> | undefined
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined
 let autosaveReady = false
+let adminScheduleCheckTimer: ReturnType<typeof setInterval> | undefined
+const adminScheduleNow = ref(Date.now())
 
 const managedArticles = ref<ManagedArticle[]>(sourceArticles.value)
 const managedProjects = ref<ManagedProject[]>(sourceProjects.value)
@@ -265,7 +303,47 @@ const draftDescription = ref(managedArticles.value[0]?.description || '用于文
 const draftCategory = ref(managedArticles.value[0]?.category || '未分类')
 const draftTags = ref((managedArticles.value[0]?.tags || ['Draft']).join(', '))
 const draftDate = ref(managedArticles.value[0]?.date || new Date().toISOString().slice(0, 10))
-const draftPublished = ref(managedArticles.value[0]?.published ?? false)
+const toDatetimeLocalValue = (value?: string) => {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+
+  return localDate.toISOString().slice(0, 16)
+}
+const fromDatetimeLocalValue = (value: string) => {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const offsetMinutes = -date.getTimezoneOffset()
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-'
+  const absoluteOffset = Math.abs(offsetMinutes)
+  const offsetHours = String(Math.floor(absoluteOffset / 60)).padStart(2, '0')
+  const offsetRemainderMinutes = String(absoluteOffset % 60).padStart(2, '0')
+
+  return `${value}:00${offsetSign}${offsetHours}:${offsetRemainderMinutes}`
+}
+const nextScheduledDatetimeLocalValue = () => {
+  const date = new Date(Date.now() + 60 * 60_000)
+  date.setMinutes(0, 0, 0)
+
+  return toDatetimeLocalValue(date.toISOString())
+}
+const draftScheduledAt = ref(toDatetimeLocalValue(managedArticles.value[0]?.scheduledAt))
 const draftLocked = ref(managedArticles.value[0]?.locked ?? false)
 const draftPinned = ref(managedArticles.value[0]?.pinned ?? false)
 const draftMarkdown = ref(managedArticles.value[0]?.markdown || '# 新的文章标题\n\n从这里开始写 Markdown。')
@@ -300,6 +378,7 @@ const articleSearchQuery = ref('')
 const articleCategoryFilter = ref('all')
 const articleTagFilter = ref('all')
 const articleStateFilter = ref('all')
+const draftWorkflowStatus = ref<ArticleWorkflowStatus>(managedArticles.value[0]?.workflowStatus || (managedArticles.value[0]?.published ? 'published' : 'draft'))
 const projectSearchQuery = ref('')
 const projectStatusFilter = ref('all')
 const projectCategoryFilter = ref('all')
@@ -310,6 +389,128 @@ const friendStatusFilter = ref('all')
 const commentSearchQuery = ref('')
 const commentStatusFilter = ref('all')
 const selectedCommentIds = ref<string[]>([])
+const commentModerationRules = ref(cloneCommentModerationRules(sourceCommentModerationRules.value))
+
+const articleWorkflowOptions: {
+  value: ArticleWorkflowStatus
+  label: string
+  description: string
+}[] = [
+  { value: 'draft', label: '草稿', description: '只在后台编辑，不进入前台。' },
+  { value: 'review', label: '待审核', description: '内容完成，等待发布检查或人工确认。' },
+  { value: 'scheduled', label: '定时', description: '到达设定时间后进入前台。' },
+  { value: 'published', label: '已发布', description: '通过检查后在前台展示。' },
+  { value: 'archived', label: '已归档', description: '保留文件和历史，前台隐藏。' }
+]
+const articleWorkflowLabelMap = Object.fromEntries(
+  articleWorkflowOptions.map((option) => [option.value, option.label])
+) as Record<ArticleWorkflowStatus, string>
+const isScheduledArticleReady = (article: Pick<ManagedArticle, 'scheduledAt'>) => {
+  if (!article.scheduledAt) {
+    return false
+  }
+
+  const timestamp = Date.parse(article.scheduledAt)
+
+  return !Number.isNaN(timestamp) && timestamp <= adminScheduleNow.value
+}
+const getArticleWorkflowStatus = (article: Pick<ManagedArticle, 'workflowStatus' | 'published' | 'scheduledAt'>): ArticleWorkflowStatus => {
+  const workflowStatus = article.workflowStatus || (article.published ? 'published' : 'draft')
+
+  return workflowStatus === 'scheduled' && isScheduledArticleReady(article) ? 'published' : workflowStatus
+}
+
+type AdminConfirmationOptions = {
+  title: string
+  message: string
+  confirmLabel?: string
+  tone?: 'danger' | 'warning'
+}
+
+type PendingAdminConfirmation = Required<Pick<AdminConfirmationOptions, 'title' | 'message' | 'tone'>> & {
+  confirmLabel: string
+  resolve: (confirmed: boolean) => void
+}
+
+type AdminUndoAction = {
+  id: number
+  title: string
+  message: string
+  loading: boolean
+  run: () => Promise<void>
+  timer?: ReturnType<typeof setTimeout>
+}
+
+const pendingConfirmation = ref<PendingAdminConfirmation | null>(null)
+const undoActions = ref<AdminUndoAction[]>([])
+let undoActionId = 0
+
+const requestAdminConfirmation = (options: AdminConfirmationOptions) => new Promise<boolean>((resolve) => {
+  pendingConfirmation.value = {
+    title: options.title,
+    message: options.message,
+    confirmLabel: options.confirmLabel || '确认操作',
+    tone: options.tone || 'danger',
+    resolve
+  }
+})
+
+const resolveAdminConfirmation = (confirmed: boolean) => {
+  const confirmation = pendingConfirmation.value
+
+  if (!confirmation) {
+    return
+  }
+
+  pendingConfirmation.value = null
+  confirmation.resolve(confirmed)
+}
+
+const dismissUndoAction = (id: number) => {
+  const action = undoActions.value.find((item) => item.id === id)
+
+  if (action?.timer) {
+    clearTimeout(action.timer)
+  }
+
+  undoActions.value = undoActions.value.filter((item) => item.id !== id)
+}
+
+const pushUndoAction = (input: Omit<AdminUndoAction, 'id' | 'loading' | 'timer'>) => {
+  const action: AdminUndoAction = {
+    id: undoActionId += 1,
+    title: input.title,
+    message: input.message,
+    loading: false,
+    run: input.run
+  }
+
+  action.timer = setTimeout(() => {
+    dismissUndoAction(action.id)
+  }, 10000)
+
+  const nextActions = [action, ...undoActions.value]
+
+  for (const removedAction of nextActions.slice(3)) {
+    if (removedAction.timer) {
+      clearTimeout(removedAction.timer)
+    }
+  }
+
+  undoActions.value = nextActions.slice(0, 3)
+}
+
+const runUndoAction = async (action: AdminUndoAction) => {
+  action.loading = true
+
+  try {
+    await action.run()
+    dismissUndoAction(action.id)
+  } catch {
+    action.loading = false
+    setAdminNotice('撤销失败，请检查服务端日志或使用备份恢复。')
+  }
+}
 
 const articleCount = computed(() => managedArticles.value.length)
 const projectCount = computed(() => managedProjects.value.length)
@@ -321,14 +522,22 @@ const friendStats = computed(() => ({
   total: managedFriends.value.length,
   pending: managedFriends.value.filter((friend) => friend.status === '待审核').length,
   approved: managedFriends.value.filter((friend) => friend.status === '已通过').length,
-  rejected: managedFriends.value.filter((friend) => friend.status === '已拒绝').length
+  rejected: managedFriends.value.filter((friend) => friend.status === '已拒绝').length,
+  unchecked: managedFriends.value.filter((friend) => friend.checkStatus === 'unchecked').length,
+  ok: managedFriends.value.filter((friend) => friend.checkStatus === 'ok').length,
+  warning: managedFriends.value.filter((friend) => friend.checkStatus === 'warning').length,
+  error: managedFriends.value.filter((friend) => friend.checkStatus === 'error').length
 }))
 const pendingCommentCount = computed(() => managedComments.value.filter((comment) => comment.status === 'waiting').length)
 const projectStats = computed(() => ({
   total: managedProjects.value.length,
   visible: managedProjects.value.filter((project) => !project.hidden).length,
   hidden: managedProjects.value.filter((project) => project.hidden).length,
-  featured: managedProjects.value.filter((project) => project.featured).length
+  featured: managedProjects.value.filter((project) => project.featured).length,
+  unchecked: managedProjects.value.filter((project) => project.checkStatus === 'unchecked').length,
+  ok: managedProjects.value.filter((project) => project.checkStatus === 'ok').length,
+  warning: managedProjects.value.filter((project) => project.checkStatus === 'warning').length,
+  error: managedProjects.value.filter((project) => project.checkStatus === 'error').length
 }))
 const commentStats = computed(() => ({
   total: managedComments.value.length,
@@ -336,8 +545,17 @@ const commentStats = computed(() => ({
   waiting: managedComments.value.filter((comment) => comment.status === 'waiting').length,
   spam: managedComments.value.filter((comment) => comment.status === 'spam').length
 }))
-const publishedCount = computed(() => managedArticles.value.filter((article) => article.published).length)
-const draftCount = computed(() => managedArticles.value.filter((article) => !article.published).length)
+const articleWorkflowCounts = computed(() => articleWorkflowOptions.reduce((counts, option) => ({
+  ...counts,
+  [option.value]: managedArticles.value.filter((article) => (
+    getArticleWorkflowStatus(article) === option.value
+  )).length
+}), {} as Record<ArticleWorkflowStatus, number>))
+const publishedCount = computed(() => articleWorkflowCounts.value.published)
+const draftCount = computed(() => articleWorkflowCounts.value.draft)
+const reviewCount = computed(() => articleWorkflowCounts.value.review)
+const scheduledCount = computed(() => articleWorkflowCounts.value.scheduled)
+const archivedCount = computed(() => articleWorkflowCounts.value.archived)
 const latestArticles = computed(() => (
   [...managedArticles.value]
     .sort(compareArticles)
@@ -365,8 +583,7 @@ const filteredManagedArticles = computed(() => {
     (articleTagFilter.value === 'all' || article.tags.includes(articleTagFilter.value)) &&
     (
       articleStateFilter.value === 'all' ||
-      (articleStateFilter.value === 'published' && article.published) ||
-      (articleStateFilter.value === 'draft' && !article.published) ||
+      getArticleWorkflowStatus(article) === articleStateFilter.value ||
       (articleStateFilter.value === 'locked' && article.locked) ||
       (articleStateFilter.value === 'unlocked' && !article.locked) ||
       (articleStateFilter.value === 'pinned' && article.pinned) ||
@@ -392,7 +609,9 @@ const filteredManagedProjects = computed(() => {
       ...project,
       type: 'project' as const,
       pinned: project.featured,
-      published: !project.hidden
+      published: !project.hidden,
+      check: project.checkStatus,
+      content: `${project.description} ${project.checkStatus} ${project.checkMessage}`
     })), projectSearchQuery.value)
     : managedProjects.value
 
@@ -426,6 +645,8 @@ const filteredManagedFriends = computed(() => {
       friend.contact.toLowerCase().includes(query) ||
       friend.backlinkUrl.toLowerCase().includes(query) ||
       friend.reviewNote.toLowerCase().includes(query) ||
+      friend.checkStatus.toLowerCase().includes(query) ||
+      friend.checkMessage.toLowerCase().includes(query) ||
       friend.tags.some((tag) => tag.toLowerCase().includes(query))
     )
   ))
@@ -458,14 +679,140 @@ const previewArticle = computed(() => ({
   title: draftTitle.value,
   description: draftDescription.value,
   date: draftDate.value,
+  scheduledAt: fromDatetimeLocalValue(draftScheduledAt.value) || undefined,
   category: draftCategory.value,
   tags: draftTagList.value
 }))
+const getMarkdownPlainText = (markdown: string) => (
+  markdown
+    .replace(/^---[\s\S]*?---\s*/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[[^\]]*]\([^)]+\)/g, '')
+    .replace(/\[[^\]]+]\([^)]+\)/g, '$1')
+    .replace(/[#>*_~|\-[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+)
+const createPublishCheck = (
+  id: string,
+  label: string,
+  ok: boolean,
+  passDetail: string,
+  failDetail: string,
+  severity: ArticlePublishCheck['severity'] = 'error'
+): ArticlePublishCheck => ({
+  id,
+  label,
+  detail: ok ? passDetail : failDetail,
+  severity: ok ? 'pass' : severity
+})
+const publishChecks = computed<ArticlePublishCheck[]>(() => {
+  const title = draftTitle.value.trim()
+  const description = draftDescription.value.trim()
+  const category = draftCategory.value.trim()
+  const tags = draftTagList.value
+  const markdown = draftMarkdown.value.trim()
+  const plainText = getMarkdownPlainText(markdown)
+  const imageMatches = Array.from(markdown.matchAll(/!\[([^\]]*)]\(([^)]+)\)/g))
+  const emptyAltImages = imageMatches.filter((match) => !String(match[1] || '').trim()).length
+  const today = new Date()
+  const publishedDate = new Date(`${draftDate.value}T00:00:00`)
+  const dateIsValid = Boolean(draftDate.value) && !Number.isNaN(publishedDate.getTime())
+  const scheduledDate = new Date(draftScheduledAt.value)
+  const scheduledDateIsValid = Boolean(draftScheduledAt.value) && !Number.isNaN(scheduledDate.getTime())
+  const scheduledDateIsFuture = scheduledDateIsValid && scheduledDate.getTime() > today.getTime()
+  const usesScheduledPublish = draftWorkflowStatus.value === 'scheduled'
+  const dateNotTooFuture = dateIsValid
+    ? usesScheduledPublish || publishedDate.getTime() <= today.getTime() + 1000 * 60 * 60 * 24
+    : false
+  const duplicateSlug = selectedArticleId.value === 'new'
+    ? managedArticles.value.some((article) => article.title.trim().toLowerCase() === title.toLowerCase())
+    : false
+
+  return [
+    createPublishCheck(
+      'title',
+      '标题',
+      title.length >= 4 && title.length <= 80,
+      `标题长度 ${title.length}，适合展示。`,
+      '标题需要 4-80 个字符，避免过短或在列表中难以换行。'
+    ),
+    createPublishCheck(
+      'description',
+      '摘要',
+      description.length >= 30 && description.length <= 180,
+      `摘要长度 ${description.length}，适合 SEO 和列表展示。`,
+      '摘要建议 30-180 个字符，发布前需要补齐。'
+    ),
+    createPublishCheck(
+      'taxonomy',
+      '分类与标签',
+      Boolean(category) && tags.length > 0,
+      `${category} / ${tags.length} 个标签。`,
+      '需要设置分类，并至少添加 1 个标签。'
+    ),
+    createPublishCheck(
+      'date',
+      '发布日期',
+      dateIsValid && dateNotTooFuture,
+      `发布日期为 ${draftDate.value}。`,
+      dateIsValid ? '发布日期超过明天，请确认是否需要定时发布。' : '发布日期无效。',
+      dateIsValid ? 'warning' : 'error'
+    ),
+    ...(usesScheduledPublish
+      ? [
+          createPublishCheck(
+            'scheduled-at',
+            '定时发布时间',
+            scheduledDateIsValid && scheduledDateIsFuture,
+            `将在 ${draftScheduledAt.value.replace('T', ' ')} 后公开。`,
+            scheduledDateIsValid ? '定时发布时间需要晚于当前时间。' : '请选择定时发布时间。',
+            'error'
+          )
+        ]
+      : []),
+    createPublishCheck(
+      'body',
+      '正文内容',
+      plainText.length >= 300,
+      `正文约 ${plainText.length} 个纯文本字符。`,
+      '正文少于 300 个纯文本字符，可能不适合正式发布。',
+      'warning'
+    ),
+    createPublishCheck(
+      'heading',
+      '正文结构',
+      /^#{2,3}\s+\S+/m.test(markdown),
+      '正文包含二级或三级标题，结构可扫描。',
+      '建议至少包含一个二级或三级标题，方便阅读和目录定位。',
+      'warning'
+    ),
+    createPublishCheck(
+      'image-alt',
+      '图片替代文本',
+      emptyAltImages === 0,
+      imageMatches.length > 0 ? `${imageMatches.length} 张图片均包含替代文本。` : '未检测到普通 Markdown 图片。',
+      `${emptyAltImages} 张 Markdown 图片缺少替代文本。`,
+      'warning'
+    ),
+    createPublishCheck(
+      'duplicate',
+      '重复标题',
+      !duplicateSlug,
+      '未发现同名文章。',
+      '已存在同名文章，新建发布会覆盖同 slug 文件，请先调整标题。',
+      'error'
+    )
+  ]
+})
+const blockingPublishChecks = computed(() => publishChecks.value.filter((check) => check.severity === 'error'))
+const warningPublishChecks = computed(() => publishChecks.value.filter((check) => check.severity === 'warning'))
 const stats = computed<AdminStat[]>(() => [
   {
     label: '文章数量',
     value: String(articleCount.value).padStart(2, '0'),
-    detail: `${publishedCount.value} 篇已发布 / ${draftCount.value} 篇草稿`
+    detail: `${publishedCount.value} 已发布 / ${draftCount.value} 草稿 / ${reviewCount.value} 待审 / ${scheduledCount.value} 定时 / ${archivedCount.value} 归档`
   },
   {
     label: '观看量',
@@ -518,7 +865,8 @@ const selectArticle = (article: ManagedArticle) => {
   draftCategory.value = article.category
   draftTags.value = article.tags.join(', ')
   draftDate.value = article.date
-  draftPublished.value = article.published
+  draftScheduledAt.value = toDatetimeLocalValue(article.scheduledAt)
+  draftWorkflowStatus.value = getArticleWorkflowStatus(article)
   draftLocked.value = article.locked
   draftPinned.value = article.pinned
   draftMarkdown.value = article.markdown || `# ${article.title}\n\n${article.description}`
@@ -531,7 +879,8 @@ const createArticle = () => {
   draftCategory.value = '未分类'
   draftTags.value = 'Draft'
   draftDate.value = new Date().toISOString().slice(0, 10)
-  draftPublished.value = false
+  draftScheduledAt.value = ''
+  draftWorkflowStatus.value = 'draft'
   draftLocked.value = false
   draftPinned.value = false
   draftMarkdown.value = '# 新的文章标题\n\n从这里开始写 Markdown。'
@@ -625,6 +974,75 @@ const refreshMedia = async () => {
   }
 }
 
+const getBackupFilename = (backup: AdminBackupPayload) => {
+  const timestamp = String(backup.createdAt || new Date().toISOString()).replace(/[:.]/g, '-')
+
+  return `chankoblog-backup-${timestamp}.json`
+}
+
+const exportBackup = async () => {
+  backupLoading.value = true
+  backupError.value = ''
+
+  try {
+    const backup = await adminFetch<AdminBackupPayload>('/api/admin/backup')
+    const blob = new Blob([`${JSON.stringify(backup, null, 2)}\n`], {
+      type: 'application/json;charset=utf-8'
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+
+    link.href = url
+    link.download = getBackupFilename(backup)
+    document.body.append(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    void refreshLogs()
+    setAdminNotice(`已导出备份，包含 ${backup.files.length} 个文件和 ${backup.database?.walineComments.length || 0} 条评论记录。`)
+  } catch {
+    backupError.value = '备份导出失败，请检查服务端日志。'
+  } finally {
+    backupLoading.value = false
+  }
+}
+
+const restoreBackup = async (backup: AdminBackupPayload) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '恢复数据备份',
+    message: '该操作会覆盖当前同名文章、数据 JSON 与媒体文件，并按主键恢复备份内的数据库记录。恢复前服务端会自动生成本地恢复点，但仍建议确认备份来源可靠。',
+    confirmLabel: '恢复备份',
+    tone: 'warning'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
+  backupLoading.value = true
+  backupError.value = ''
+
+  try {
+    backupRestoreResult.value = await adminFetch<AdminBackupRestoreResult>('/api/admin/backup/restore', {
+      method: 'POST',
+      body: backup
+    })
+
+    await refreshAdminContent()
+    await Promise.all([
+      refreshMedia(),
+      refreshComments(),
+      refreshArticleReliability(),
+      refreshLogs()
+    ])
+    setAdminNotice(`已恢复 ${backupRestoreResult.value.restoredCount} 个文件。`)
+  } catch {
+    backupError.value = '备份恢复失败，请确认备份格式和文件大小。'
+  } finally {
+    backupLoading.value = false
+  }
+}
+
 const uploadMedia = async (files: File[]) => {
   if (files.length === 0 || mediaUploading.value) {
     return
@@ -657,6 +1075,16 @@ const uploadMedia = async (files: File[]) => {
 }
 
 const deleteMedia = async (asset: ManagedMediaAsset) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除媒体文件',
+    message: `确定删除 ${asset.name}？\n媒体文件删除后不能直接撤销，只能通过备份恢复。`,
+    confirmLabel: '删除媒体'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
   mediaError.value = ''
 
@@ -674,6 +1102,42 @@ const deleteMedia = async (asset: ManagedMediaAsset) => {
   }
 }
 
+const deleteSelectedMedia = async (assets: ManagedMediaAsset[]) => {
+  if (assets.length === 0) {
+    return
+  }
+
+  const confirmed = await requestAdminConfirmation({
+    title: '批量删除媒体文件',
+    message: `确定删除选中的 ${assets.length} 个媒体文件？\n媒体文件删除后不能直接撤销，只能通过备份恢复。`,
+    confirmLabel: '批量删除'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
+  saving.value = true
+  mediaError.value = ''
+
+  try {
+    await Promise.all(
+      assets.map((asset) => adminFetch(`/api/admin/media/${encodeURIComponent(asset.name)}`, {
+        method: 'DELETE'
+      }))
+    )
+
+    const deletedNames = new Set(assets.map((asset) => asset.name))
+    mediaAssets.value = mediaAssets.value.filter((item) => !deletedNames.has(item.name))
+    void refreshLogs()
+    setAdminNotice(`已删除 ${assets.length} 个媒体文件。`)
+  } catch {
+    mediaError.value = '媒体批量删除失败。'
+  } finally {
+    saving.value = false
+  }
+}
+
 const buildDraftPayload = () => {
   const current = managedArticles.value.find((article) => article.id === selectedArticleId.value)
 
@@ -684,10 +1148,12 @@ const buildDraftPayload = () => {
       title: draftTitle.value,
       description: draftDescription.value,
       date: draftDate.value,
+      scheduledAt: draftWorkflowStatus.value === 'scheduled' ? fromDatetimeLocalValue(draftScheduledAt.value) : '',
       author: current?.author || 'Chanko',
       authorUrl: current?.authorUrl || '/about',
       category: draftCategory.value,
-      published: draftPublished.value,
+      workflowStatus: draftWorkflowStatus.value,
+      published: draftWorkflowStatus.value === 'published',
       locked: draftLocked.value,
       pinned: draftPinned.value,
       views: current?.views || 0,
@@ -784,10 +1250,30 @@ const replaceProject = (project: ManagedProject) => {
 }
 
 const saveDraft = async () => {
+  const { current, body } = buildDraftPayload()
+  const validatesPublishChecks = body.workflowStatus === 'published' || body.workflowStatus === 'scheduled'
+
+  if (validatesPublishChecks && blockingPublishChecks.value.length > 0) {
+    setAdminNotice(`发布检查未通过：${blockingPublishChecks.value.map((check) => check.label).join('、')}。`)
+    return
+  }
+
+  if (validatesPublishChecks && warningPublishChecks.value.length > 0) {
+    const confirmed = await requestAdminConfirmation({
+      title: '发布检查存在提醒',
+      message: `以下项目建议发布前处理：\n${warningPublishChecks.value.map((check) => `- ${check.label}：${check.detail}`).join('\n')}`,
+      confirmLabel: body.workflowStatus === 'scheduled' ? '继续定时' : '继续发布',
+      tone: 'warning'
+    })
+
+    if (!confirmed) {
+      return
+    }
+  }
+
   saving.value = true
 
   try {
-    const { current, body } = buildDraftPayload()
     const article = await adminFetch<ManagedArticle>('/api/admin/articles', {
       method: 'POST',
       body
@@ -795,6 +1281,7 @@ const saveDraft = async () => {
 
     replaceArticle(article)
     selectedArticleId.value = article.id
+    draftWorkflowStatus.value = getArticleWorkflowStatus(article)
     await refreshArticleReliability()
     void refreshLogs()
     autosaveStatus.value = '已保存，自动保存已清理'
@@ -858,7 +1345,90 @@ const toggleArticlePinned = async (article: ManagedArticle) => {
   }
 }
 
+const setArticleWorkflowStatus = async (article: ManagedArticle, workflowStatus: ArticleWorkflowStatus) => {
+  const nextPublished = workflowStatus === 'published'
+
+  if (selectedArticleId.value === article.id) {
+    draftWorkflowStatus.value = workflowStatus
+    if (workflowStatus === 'scheduled' && !draftScheduledAt.value) {
+      draftScheduledAt.value = nextScheduledDatetimeLocalValue()
+    }
+    await saveDraft()
+    return
+  }
+
+  if (workflowStatus === 'published') {
+    selectArticle(article)
+    draftWorkflowStatus.value = 'published'
+    setAdminNotice('已载入该文章并切换为待发布，请在编辑器中保存，通过发布检查后进入前台。')
+    return
+  }
+
+  if (workflowStatus === 'scheduled') {
+    selectArticle(article)
+    draftWorkflowStatus.value = 'scheduled'
+    draftScheduledAt.value = toDatetimeLocalValue(article.scheduledAt) || nextScheduledDatetimeLocalValue()
+    setAdminNotice('已载入该文章并切换为定时发布，请选择发布时间后保存。')
+    return
+  }
+
+  if (workflowStatus === 'published' && blockingPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
+    setAdminNotice(`发布检查未通过：${blockingPublishChecks.value.map((check) => check.label).join('、')}。`)
+    return
+  }
+
+  if (workflowStatus === 'published' && warningPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
+    const confirmed = await requestAdminConfirmation({
+      title: '发布检查存在提醒',
+      message: `以下项目建议发布前处理：\n${warningPublishChecks.value.map((check) => `- ${check.label}：${check.detail}`).join('\n')}`,
+      confirmLabel: '继续发布',
+      tone: 'warning'
+    })
+
+    if (!confirmed) {
+      return
+    }
+  }
+
+  saving.value = true
+
+  try {
+    const updated = await adminFetch<ManagedArticle>('/api/admin/articles', {
+      method: 'POST',
+      body: {
+        ...article,
+        workflowStatus,
+        scheduledAt: '',
+        published: nextPublished
+      }
+    })
+
+    replaceArticle(updated)
+
+    if (selectedArticleId.value === updated.id) {
+      draftWorkflowStatus.value = getArticleWorkflowStatus(updated)
+    }
+
+    void refreshLogs()
+    setAdminNotice(`文章工作流已切换为：${articleWorkflowLabelMap[getArticleWorkflowStatus(updated)]}。`)
+  } catch {
+    setAdminNotice('文章工作流状态更新失败。')
+  } finally {
+    saving.value = false
+  }
+}
+
 const deleteArticle = async (article: ManagedArticle) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除文章',
+    message: `确定删除《${article.title}》？\n文章文件会从 content/blog 移除，删除后 10 秒内可从当前页面撤销。`,
+    confirmLabel: '删除文章'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
 
   try {
@@ -881,6 +1451,22 @@ const deleteArticle = async (article: ManagedArticle) => {
     await refreshArticleReliability()
     void refreshLogs()
     setAdminNotice('文章文件已删除。')
+    pushUndoAction({
+      title: '撤销删除文章',
+      message: `恢复《${article.title}》`,
+      run: async () => {
+        const restored = await adminFetch<ManagedArticle>('/api/admin/articles', {
+          method: 'POST',
+          body: article
+        })
+
+        replaceArticle(restored)
+        selectArticle(restored)
+        await refreshArticleReliability()
+        void refreshLogs()
+        setAdminNotice('已撤销文章删除。')
+      }
+    })
   } catch {
     setAdminNotice('文章删除失败。')
   } finally {
@@ -928,7 +1514,8 @@ const selectArticleAutosave = (autosave: ManagedArticleAutosave) => {
   draftCategory.value = autosave.category
   draftTags.value = autosave.tags.join(', ')
   draftDate.value = autosave.date
-  draftPublished.value = autosave.published
+  draftScheduledAt.value = toDatetimeLocalValue(autosave.scheduledAt)
+  draftWorkflowStatus.value = getArticleWorkflowStatus(autosave)
   draftLocked.value = autosave.locked
   draftPinned.value = autosave.pinned
   draftMarkdown.value = autosave.markdown
@@ -936,6 +1523,16 @@ const selectArticleAutosave = (autosave: ManagedArticleAutosave) => {
 }
 
 const deleteArticleAutosaveEntry = async (autosave: ManagedArticleAutosave) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除自动保存',
+    message: `确定删除 ${autosave.title} 的自动保存记录？\n删除后 10 秒内可撤销。`,
+    confirmLabel: '删除记录'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
 
   try {
@@ -945,6 +1542,26 @@ const deleteArticleAutosaveEntry = async (autosave: ManagedArticleAutosave) => {
     articleAutosaves.value = articleAutosaves.value.filter((item) => item.slug !== autosave.slug)
     void refreshLogs()
     setAdminNotice('自动保存记录已删除。')
+    pushUndoAction({
+      title: '撤销删除自动保存',
+      message: `恢复 ${autosave.title} 的自动保存记录`,
+      run: async () => {
+        const restored = await adminFetch<ManagedArticleAutosave>('/api/admin/articles/autosave', {
+          method: 'POST',
+          body: autosave
+        })
+        const index = articleAutosaves.value.findIndex((item) => item.slug === restored.slug)
+
+        if (index >= 0) {
+          articleAutosaves.value[index] = restored
+        } else {
+          articleAutosaves.value.unshift(restored)
+        }
+
+        void refreshLogs()
+        setAdminNotice('已撤销自动保存删除。')
+      }
+    })
   } catch {
     setAdminNotice('自动保存记录删除失败。')
   } finally {
@@ -953,6 +1570,17 @@ const deleteArticleAutosaveEntry = async (autosave: ManagedArticleAutosave) => {
 }
 
 const restoreArticleVersion = async (version: ManagedArticleVersion) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '恢复文章版本',
+    message: `确定将《${version.title}》恢复到 ${new Date(version.createdAt).toLocaleString('zh-CN')} 的版本？\n当前版本会先进入版本记录。`,
+    confirmLabel: '恢复版本',
+    tone: 'warning'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
 
   try {
@@ -1044,6 +1672,72 @@ const toggleProjectHidden = (project: ManagedProject) => (
   patchProject(project, { hidden: !project.hidden }, project.hidden ? '项目已设为公开。' : '项目已隐藏。')
 )
 
+const inspectProject = async (project: ManagedProject) => {
+  projectInspectingIds.value = [...new Set([...projectInspectingIds.value, project.id])]
+
+  try {
+    const updated = await adminFetch<ManagedProject>(`/api/admin/projects/${encodeURIComponent(project.id)}/inspect`, {
+      method: 'POST'
+    })
+
+    replaceProject(updated)
+
+    if (selectedProjectId.value === updated.id) {
+      selectProject(updated)
+    }
+
+    await refreshProjects()
+    void refreshLogs()
+    setAdminNotice(`项目巡检完成：${updated.name} / ${updated.checkStatus}。`)
+  } catch {
+    setAdminNotice('项目巡检失败，请检查链接或服务端日志。')
+  } finally {
+    projectInspectingIds.value = projectInspectingIds.value.filter((id) => id !== project.id)
+  }
+}
+
+const inspectProjects = async (projects: ManagedProject[]) => {
+  const ids = projects.map((project) => project.id)
+
+  if (ids.length === 0) {
+    setAdminNotice('当前列表没有可巡检的项目。')
+    return
+  }
+
+  projectInspecting.value = true
+  projectInspectingIds.value = ids
+
+  try {
+    const result = await adminFetch<{
+      projects: ManagedProject[]
+      checkedCount: number
+      warningCount: number
+      errorCount: number
+    }>('/api/admin/projects/inspect', {
+      method: 'POST',
+      body: {
+        ids
+      }
+    })
+
+    managedProjects.value = result.projects
+    const selected = result.projects.find((project) => project.id === selectedProjectId.value)
+
+    if (selected) {
+      selectProject(selected)
+    }
+
+    await refreshProjects()
+    void refreshLogs()
+    setAdminNotice(`已巡检 ${result.checkedCount} 个项目，${result.warningCount} 个提醒，${result.errorCount} 个异常。`)
+  } catch {
+    setAdminNotice('批量项目巡检失败，请检查网络或服务端日志。')
+  } finally {
+    projectInspecting.value = false
+    projectInspectingIds.value = []
+  }
+}
+
 const moveProject = (project: ManagedProject, direction: 'up' | 'down') => {
   const visibleProjects = filteredManagedProjects.value
   const index = visibleProjects.findIndex((item) => item.id === project.id)
@@ -1097,6 +1791,16 @@ const moveProject = (project: ManagedProject, direction: 'up' | 'down') => {
 }
 
 const deleteProject = async (project: ManagedProject) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除项目',
+    message: `确定删除项目「${project.name}」？\n删除后 10 秒内可从当前页面撤销。`,
+    confirmLabel: '删除项目'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
 
   try {
@@ -1116,7 +1820,24 @@ const deleteProject = async (project: ManagedProject) => {
     }
 
     await refreshProjects()
+    void refreshLogs()
     setAdminNotice('项目已删除。')
+    pushUndoAction({
+      title: '撤销删除项目',
+      message: `恢复「${project.name}」`,
+      run: async () => {
+        const restored = await adminFetch<ManagedProject>('/api/admin/projects', {
+          method: 'POST',
+          body: project
+        })
+
+        replaceProject(restored)
+        selectProject(restored)
+        await refreshProjects()
+        void refreshLogs()
+        setAdminNotice('已撤销项目删除。')
+      }
+    })
   } catch {
     setAdminNotice('项目删除失败。')
   } finally {
@@ -1205,6 +1926,27 @@ const refreshComments = async () => {
   }
 }
 
+const saveCommentModerationRules = async () => {
+  commentRulesSaving.value = true
+  commentsError.value = ''
+
+  try {
+    const rules = await adminFetch<ManagedCommentModerationRules>('/api/admin/comments/rules', {
+      method: 'POST',
+      body: commentModerationRules.value
+    })
+
+    commentModerationRules.value = cloneCommentModerationRules(rules)
+    void refreshComments()
+    void refreshLogs()
+    setAdminNotice('评论治理规则已保存。')
+  } catch {
+    commentsError.value = '评论治理规则保存失败。'
+  } finally {
+    commentRulesSaving.value = false
+  }
+}
+
 const replaceComment = (comment: ManagedComment) => {
   const index = managedComments.value.findIndex((item) => item.id === comment.id)
 
@@ -1269,7 +2011,48 @@ const bulkSetCommentStatus = async (ids: string[], status: ManagedCommentStatus)
   }
 }
 
+const moderateComments = async (ids: string[]) => {
+  if (ids.length === 0) {
+    return
+  }
+
+  saving.value = true
+  commentsError.value = ''
+
+  try {
+    const result = await adminFetch<{
+      checkedCount: number
+      updatedCount: number
+      comments: ManagedComment[]
+    }>('/api/admin/comments/moderate', {
+      method: 'POST',
+      body: {
+        ids
+      }
+    })
+
+    replaceComments(result.comments)
+    selectedCommentIds.value = selectedCommentIds.value.filter((id) => !ids.includes(id))
+    void refreshLogs()
+    setAdminNotice(`已按规则检查 ${result.checkedCount} 条评论，更新 ${result.updatedCount} 条。`)
+  } catch {
+    commentsError.value = '评论规则治理失败。'
+  } finally {
+    saving.value = false
+  }
+}
+
 const deleteComment = async (comment: ManagedComment) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除评论',
+    message: `确定删除 ${comment.author || '匿名用户'} 的这条评论？\nWaline 评论删除后不能直接撤销，只能通过数据库或备份恢复。`,
+    confirmLabel: '删除评论'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
   commentsError.value = ''
 
@@ -1291,6 +2074,16 @@ const deleteComment = async (comment: ManagedComment) => {
 
 const bulkDeleteComments = async (ids: string[]) => {
   if (ids.length === 0) {
+    return
+  }
+
+  const confirmed = await requestAdminConfirmation({
+    title: '批量删除评论',
+    message: `确定删除选中的 ${ids.length} 条评论？\n该操作不能直接撤销。`,
+    confirmLabel: '批量删除'
+  })
+
+  if (!confirmed) {
     return
   }
 
@@ -1370,7 +2163,83 @@ const toggleFriendFeatured = async (friend: ManagedFriend) => {
   }
 }
 
+const inspectFriend = async (friend: ManagedFriend) => {
+  friendInspectingIds.value = [...new Set([...friendInspectingIds.value, friend.id])]
+
+  try {
+    const updated = await adminFetch<ManagedFriend>(`/api/admin/friends/${encodeURIComponent(friend.id)}/inspect`, {
+      method: 'POST'
+    })
+
+    replaceFriend(updated)
+
+    if (selectedFriendId.value === updated.id) {
+      selectFriend(updated)
+    }
+
+    await refreshFriends()
+    void refreshLogs()
+    setAdminNotice(`友链巡检完成：${updated.name} / ${updated.checkStatus}。`)
+  } catch {
+    setAdminNotice('友链巡检失败，请检查链接或服务端日志。')
+  } finally {
+    friendInspectingIds.value = friendInspectingIds.value.filter((id) => id !== friend.id)
+  }
+}
+
+const inspectFriends = async (friends: ManagedFriend[]) => {
+  const ids = friends.map((friend) => friend.id)
+
+  if (ids.length === 0) {
+    setAdminNotice('当前列表没有可巡检的友链。')
+    return
+  }
+
+  friendInspecting.value = true
+  friendInspectingIds.value = ids
+
+  try {
+    const result = await adminFetch<{
+      friends: ManagedFriend[]
+      checkedCount: number
+      warningCount: number
+      errorCount: number
+    }>('/api/admin/friends/inspect', {
+      method: 'POST',
+      body: {
+        ids
+      }
+    })
+
+    managedFriends.value = result.friends
+    const selected = result.friends.find((friend) => friend.id === selectedFriendId.value)
+
+    if (selected) {
+      selectFriend(selected)
+    }
+
+    await refreshFriends()
+    void refreshLogs()
+    setAdminNotice(`已巡检 ${result.checkedCount} 个友链，${result.warningCount} 个提醒，${result.errorCount} 个异常。`)
+  } catch {
+    setAdminNotice('批量巡检失败，请检查网络或服务端日志。')
+  } finally {
+    friendInspecting.value = false
+    friendInspectingIds.value = []
+  }
+}
+
 const deleteFriend = async (friend: ManagedFriend) => {
+  const confirmed = await requestAdminConfirmation({
+    title: '删除友链',
+    message: `确定删除友链「${friend.name}」？\n删除后 10 秒内可从当前页面撤销。`,
+    confirmLabel: '删除友链'
+  })
+
+  if (!confirmed) {
+    return
+  }
+
   saving.value = true
 
   try {
@@ -1392,6 +2261,22 @@ const deleteFriend = async (friend: ManagedFriend) => {
     await refreshFriends()
     void refreshLogs()
     setAdminNotice('友链已删除。')
+    pushUndoAction({
+      title: '撤销删除友链',
+      message: `恢复「${friend.name}」`,
+      run: async () => {
+        const restored = await adminFetch<ManagedFriend>('/api/admin/friends', {
+          method: 'POST',
+          body: friend
+        })
+
+        replaceFriend(restored)
+        selectFriend(restored)
+        await refreshFriends()
+        void refreshLogs()
+        setAdminNotice('已撤销友链删除。')
+      }
+    })
   } catch {
     setAdminNotice('友链删除失败。')
   } finally {
@@ -1483,7 +2368,8 @@ watch(
     draftCategory,
     draftTags,
     draftDescription,
-    draftPublished,
+    draftWorkflowStatus,
+    draftScheduledAt,
     draftLocked,
     draftPinned,
     draftMarkdown
@@ -1510,6 +2396,25 @@ watch(
   }
 )
 
+watch(draftWorkflowStatus, (status) => {
+  if (status === 'scheduled' && !draftScheduledAt.value) {
+    draftScheduledAt.value = nextScheduledDatetimeLocalValue()
+  }
+})
+
+watch(adminScheduleNow, () => {
+  if (draftWorkflowStatus.value !== 'scheduled' || !draftScheduledAt.value) {
+    return
+  }
+
+  const timestamp = Date.parse(fromDatetimeLocalValue(draftScheduledAt.value))
+
+  if (!Number.isNaN(timestamp) && timestamp <= adminScheduleNow.value) {
+    draftWorkflowStatus.value = 'published'
+    draftScheduledAt.value = ''
+  }
+})
+
 onBeforeUnmount(() => {
   if (previewTimer) {
     window.clearTimeout(previewTimer)
@@ -1525,6 +2430,16 @@ onBeforeUnmount(() => {
 
   if (adminAuthCheckTimer) {
     window.clearInterval(adminAuthCheckTimer)
+  }
+
+  if (adminScheduleCheckTimer) {
+    window.clearInterval(adminScheduleCheckTimer)
+  }
+
+  for (const action of undoActions.value) {
+    if (action.timer) {
+      clearTimeout(action.timer)
+    }
   }
 
   if (import.meta.client) {
@@ -1554,6 +2469,9 @@ onMounted(() => {
   adminAuthCheckTimer = window.setInterval(() => {
     void checkAdminSession()
   }, 60_000)
+  adminScheduleCheckTimer = window.setInterval(() => {
+    adminScheduleNow.value = Date.now()
+  }, 30_000)
   window.addEventListener('focus', checkAdminSession)
   document.addEventListener('visibilitychange', checkAdminSessionWhenVisible)
 })
@@ -1585,6 +2503,36 @@ useSiteSeo({
       :comments-error="commentsError"
     />
 
+    <section
+      v-if="undoActions.length > 0"
+      class="grid gap-(--space-1) border border-line bg-code-surface p-(--space-2)"
+      aria-label="可撤销操作"
+    >
+      <article
+        v-for="action in undoActions"
+        :key="action.id"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-(--space-2) border-b border-line pb-(--space-1) last:border-b-0 last:pb-0 max-[640px]:grid-cols-1"
+      >
+        <div class="grid min-w-0 gap-1">
+          <p class="m-0 text-sm font-bold text-ink">
+            {{ action.title }}
+          </p>
+          <p class="m-0 text-[13px] leading-[1.6] text-muted">
+            {{ action.message }}。10 秒后撤销入口会自动消失。
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton size="sm" variant="solid" :loading="action.loading" @click="runUndoAction(action)">
+            <Icon name="lucide:undo-2" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            撤销
+          </AppButton>
+          <AppButton size="sm" variant="text" @click="dismissUndoAction(action.id)">
+            忽略
+          </AppButton>
+        </div>
+      </article>
+    </section>
+
     <AdminArticlesPanel
       v-show="activePanel === 'articles'"
       v-model:article-search-query="articleSearchQuery"
@@ -1593,10 +2541,11 @@ useSiteSeo({
       v-model:article-state-filter="articleStateFilter"
       v-model:draft-title="draftTitle"
       v-model:draft-date="draftDate"
+      v-model:draft-scheduled-at="draftScheduledAt"
       v-model:draft-category="draftCategory"
       v-model:draft-tags="draftTags"
       v-model:draft-description="draftDescription"
-      v-model:draft-published="draftPublished"
+      v-model:draft-workflow-status="draftWorkflowStatus"
       v-model:draft-locked="draftLocked"
       v-model:draft-pinned="draftPinned"
       v-model:draft-markdown="draftMarkdown"
@@ -1604,12 +2553,15 @@ useSiteSeo({
       :filtered-managed-articles="filteredManagedArticles"
       :article-categories="articleCategories"
       :article-tags="articleTags"
+      :article-workflow-options="articleWorkflowOptions"
+      :article-workflow-counts="articleWorkflowCounts"
       :selected-article-id="selectedArticleId"
       :saving="saving"
       :preview-value="previewValue"
       :preview-pending="previewPending"
       :preview-error="previewError"
       :preview-article="previewArticle"
+      :publish-checks="publishChecks"
       :article-versions="articleVersions"
       :article-autosaves="articleAutosaves"
       :autosave-status="autosaveStatus"
@@ -1617,6 +2569,7 @@ useSiteSeo({
       @select-article="selectArticle"
       @toggle-article-lock="toggleArticleLock"
       @toggle-article-pinned="toggleArticlePinned"
+      @set-article-workflow-status="setArticleWorkflowStatus"
       @delete-article="deleteArticle"
       @restore-article-version="restoreArticleVersion"
       @select-article-autosave="selectArticleAutosave"
@@ -1632,6 +2585,7 @@ useSiteSeo({
       :error="mediaError"
       @upload-media="uploadMedia"
       @delete-media="deleteMedia"
+      @delete-selected-media="deleteSelectedMedia"
       @refresh-media="refreshMedia"
     />
 
@@ -1660,11 +2614,15 @@ useSiteSeo({
       :project-categories="projectCategories"
       :selected-project-id="selectedProjectId"
       :saving="saving"
+      :inspecting="projectInspecting"
+      :inspecting-project-ids="projectInspectingIds"
       @create-project="createProject"
       @select-project="selectProject"
       @save-project="saveProject"
       @toggle-project-featured="toggleProjectFeatured"
       @toggle-project-hidden="toggleProjectHidden"
+      @inspect-project="inspectProject"
+      @inspect-projects="inspectProjects"
       @move-project="moveProject"
       @delete-project="deleteProject"
     />
@@ -1690,11 +2648,15 @@ useSiteSeo({
       :stats="friendStats"
       :selected-friend-id="selectedFriendId"
       :saving="saving"
+      :inspecting="friendInspecting"
+      :inspecting-friend-ids="friendInspectingIds"
       @create-friend="createFriend"
       @select-friend="selectFriend"
       @save-friend="saveFriend"
       @set-friend-status="setFriendStatus"
       @toggle-friend-featured="toggleFriendFeatured"
+      @inspect-friend="inspectFriend"
+      @inspect-friends="inspectFriends"
       @delete-friend="deleteFriend"
     />
 
@@ -1717,14 +2679,27 @@ useSiteSeo({
       v-model:selected-comment-ids="selectedCommentIds"
       :comments="filteredManagedComments"
       :stats="commentStats"
+      v-model:moderation-rules="commentModerationRules"
       :saving="saving"
+      :rules-saving="commentRulesSaving"
       :loading="commentsLoading"
       :error="commentsError"
       @refresh-comments="refreshComments"
+      @save-moderation-rules="saveCommentModerationRules"
       @set-comment-status="setCommentStatus"
       @bulk-set-comment-status="bulkSetCommentStatus"
       @bulk-delete-comments="bulkDeleteComments"
+      @moderate-comments="moderateComments"
       @delete-comment="deleteComment"
+    />
+
+    <AdminBackupPanel
+      v-show="activePanel === 'backup'"
+      :loading="backupLoading"
+      :error="backupError"
+      :result="backupRestoreResult"
+      @export-backup="exportBackup"
+      @restore-backup="restoreBackup"
     />
 
     <AdminLogsPanel
@@ -1733,6 +2708,16 @@ useSiteSeo({
       :loading="logsLoading"
       :error="logsError"
       @refresh-logs="refreshLogs"
+    />
+
+    <AdminConfirmDialog
+      :open="Boolean(pendingConfirmation)"
+      :title="pendingConfirmation?.title || ''"
+      :message="pendingConfirmation?.message || ''"
+      :confirm-label="pendingConfirmation?.confirmLabel || '确认操作'"
+      :tone="pendingConfirmation?.tone || 'danger'"
+      @confirm="resolveAdminConfirmation(true)"
+      @cancel="resolveAdminConfirmation(false)"
     />
   </AdminFrame>
 </template>

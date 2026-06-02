@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
-    "comments:build": "docker compose -f docker-compose.waline.yml build waline",
+    "comments:pull": "docker compose -f docker-compose.waline.yml pull waline",
     "comments:down": "docker compose -f docker-compose.waline.yml down",
-    "comments:up": "docker compose -f docker-compose.waline.yml up -d --build",
+    "comments:up": "docker compose -f docker-compose.waline.yml up -d",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

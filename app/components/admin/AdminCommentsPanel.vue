@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ManagedComment, ManagedCommentStatus } from '~/types/admin'
+import type { ManagedComment, ManagedCommentModerationRules, ManagedCommentStatus } from '~/types/admin'
 
 const props = defineProps<{
   comments: ManagedComment[]
@@ -10,21 +10,70 @@ const props = defineProps<{
     spam: number
   }
   saving: boolean
+  rulesSaving: boolean
   loading: boolean
   error: string
 }>()
 
 const emit = defineEmits<{
   refreshComments: []
+  saveModerationRules: []
   setCommentStatus: [comment: ManagedComment, status: ManagedCommentStatus]
   bulkSetCommentStatus: [ids: string[], status: ManagedCommentStatus]
   bulkDeleteComments: [ids: string[]]
+  moderateComments: [ids: string[]]
   deleteComment: [comment: ManagedComment]
 }>()
 
 const commentSearchQuery = defineModel<string>('commentSearchQuery', { required: true })
 const commentStatusFilter = defineModel<string>('commentStatusFilter', { required: true })
 const selectedCommentIds = defineModel<string[]>('selectedCommentIds', { required: true })
+const moderationRules = defineModel<ManagedCommentModerationRules>('moderationRules', { required: true })
+
+type RuleListKey = keyof Pick<
+  ManagedCommentModerationRules,
+  'blockedKeywords' | 'reviewKeywords' | 'blockedAuthors' | 'blockedEmailDomains' | 'blockedIps'
+>
+
+const ruleListConfigs: Array<{
+  key: RuleListKey
+  label: string
+  placeholder: string
+}> = [
+  {
+    key: 'blockedKeywords',
+    label: '拦截词',
+    placeholder: '输入后回车添加，如 博彩'
+  },
+  {
+    key: 'reviewKeywords',
+    label: '待审词',
+    placeholder: '输入后回车添加，如 联系我'
+  },
+  {
+    key: 'blockedAuthors',
+    label: '保留昵称',
+    placeholder: '输入后回车添加，如 admin'
+  },
+  {
+    key: 'blockedEmailDomains',
+    label: '拦截邮箱域名',
+    placeholder: '输入后回车添加，如 spam.com'
+  },
+  {
+    key: 'blockedIps',
+    label: 'IP 黑名单',
+    placeholder: '输入后回车添加，如 127.0.0.1'
+  }
+]
+
+const ruleDrafts = reactive<Record<RuleListKey, string>>({
+  blockedKeywords: '',
+  reviewKeywords: '',
+  blockedAuthors: '',
+  blockedEmailDomains: '',
+  blockedIps: ''
+})
 
 const visibleCommentIds = computed(() => props.comments.map((comment) => comment.id))
 const selectedVisibleIds = computed(() => (
@@ -70,6 +119,10 @@ const bulkDelete = () => {
   emit('bulkDeleteComments', selectedVisibleIds.value)
 }
 
+const moderateVisibleComments = () => {
+  emit('moderateComments', selectedVisibleIds.value.length > 0 ? selectedVisibleIds.value : visibleCommentIds.value)
+}
+
 const statusLabel = (status: ManagedCommentStatus) => {
   if (status === 'waiting') {
     return '待审核'
@@ -92,6 +145,60 @@ const statusClass = (status: ManagedCommentStatus) => {
   }
 
   return 'border-callout-success-border bg-callout-success-surface text-callout-success-text'
+}
+
+const moderationClass = (status: ManagedCommentStatus) => {
+  if (status === 'spam') {
+    return 'border-callout-danger-border bg-callout-danger-surface text-callout-danger-text'
+  }
+
+  if (status === 'waiting') {
+    return 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'
+  }
+
+  return 'border-callout-success-border bg-callout-success-surface text-callout-success-text'
+}
+
+const parseRuleList = (value: string) => (
+  value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+)
+
+const addRuleItems = (key: RuleListKey) => {
+  const items = parseRuleList(ruleDrafts[key])
+
+  if (items.length === 0) {
+    return
+  }
+
+  const existing = new Set(moderationRules.value[key].map((item) => item.toLowerCase()))
+  const nextItems = [...moderationRules.value[key]]
+
+  for (const item of items) {
+    const normalizedItem = item.toLowerCase()
+
+    if (existing.has(normalizedItem)) {
+      continue
+    }
+
+    existing.add(normalizedItem)
+    nextItems.push(item)
+  }
+
+  moderationRules.value = {
+    ...moderationRules.value,
+    [key]: nextItems
+  }
+  ruleDrafts[key] = ''
+}
+
+const removeRuleItem = (key: RuleListKey, value: string) => {
+  moderationRules.value = {
+    ...moderationRules.value,
+    [key]: moderationRules.value[key].filter((item) => item !== value)
+  }
 }
 
 const formatTime = (value: string) => {
@@ -177,6 +284,104 @@ const formatTime = (value: string) => {
       </button>
     </div>
 
+    <details class="group border border-line bg-code-surface" open>
+      <summary class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-(--space-2) border-b border-line px-(--space-2) text-sm font-bold text-muted marker:hidden">
+        <span>治理规则配置</span>
+        <Icon name="lucide:chevron-down" mode="svg" class="h-4 w-4 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <form class="grid gap-(--space-3) p-(--space-3)" @submit.prevent="emit('saveModerationRules')">
+        <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-(--space-2) max-[760px]:grid-cols-1">
+          <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+            <input v-model="moderationRules.enabled" type="checkbox" class="accent-ink">
+            启用治理规则
+          </label>
+          <p class="m-0 text-sm leading-[1.6] text-muted">
+            保存后会写入配置文件，并立即影响后台读取、按规则治理和本地评论提交。
+          </p>
+          <AppButton type="submit" variant="solid" :loading="props.rulesSaving">
+            保存规则
+          </AppButton>
+        </div>
+
+        <div class="grid grid-cols-3 gap-(--space-2) max-[920px]:grid-cols-1">
+          <label class="grid gap-2 text-sm font-bold text-muted">
+            链接上限
+            <input v-model.number="moderationRules.maxLinks" min="0" type="number" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+          </label>
+          <label class="grid gap-2 text-sm font-bold text-muted">
+            重复字符上限
+            <input v-model.number="moderationRules.maxRepeatedCharacterRun" min="1" type="number" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+          </label>
+          <label class="grid gap-2 text-sm font-bold text-muted">
+            最短正文
+            <input v-model.number="moderationRules.minContentLength" min="0" type="number" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-(--space-2) max-[920px]:grid-cols-1">
+          <section
+            v-for="config in ruleListConfigs"
+            :key="config.key"
+            class="grid content-start gap-(--space-2) border border-line bg-paper p-(--space-2)"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-(--space-1)">
+              <h3 class="m-0 text-sm font-bold text-muted">
+                {{ config.label }}
+              </h3>
+              <span class="text-[12px] font-bold uppercase tracking-normal text-muted">
+                {{ moderationRules[config.key].length }} 项
+              </span>
+            </div>
+
+            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-(--space-1) max-[520px]:grid-cols-1">
+              <input
+                v-model="ruleDrafts[config.key]"
+                class="min-h-11 border border-line bg-code-surface px-(--space-2) font-mono text-sm text-ink outline-none focus:border-ink"
+                :placeholder="config.placeholder"
+                @keydown.enter.prevent="addRuleItems(config.key)"
+              >
+              <AppButton
+                type="button"
+                size="sm"
+                :disabled="parseRuleList(ruleDrafts[config.key]).length === 0"
+                @click="addRuleItems(config.key)"
+              >
+                添加
+              </AppButton>
+            </div>
+
+            <p class="m-0 text-[12px] leading-[1.5] text-muted">
+              支持一次粘贴多项，使用逗号或换行分隔。
+            </p>
+
+            <div
+              v-if="moderationRules[config.key].length > 0"
+              class="flex min-h-12 flex-wrap content-start gap-(--space-1) border border-line bg-code-surface p-(--space-1)"
+            >
+              <span
+                v-for="item in moderationRules[config.key]"
+                :key="`${config.key}-${item}`"
+                class="inline-flex max-w-full items-center gap-1 border border-line bg-paper px-2 py-1 font-mono text-[13px] leading-none text-ink"
+              >
+                <span class="truncate">{{ item }}</span>
+                <button
+                  type="button"
+                  class="grid h-5 w-5 place-items-center text-muted transition-colors duration-200 hover:text-ink focus-visible:text-ink focus-visible:outline-none"
+                  :aria-label="`删除 ${item}`"
+                  @click="removeRuleItem(config.key, item)"
+                >
+                  <Icon name="lucide:x" mode="svg" class="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+            <p v-else class="m-0 border border-dashed border-line bg-code-surface p-(--space-2) text-sm text-muted">
+              暂无规则项
+            </p>
+          </section>
+        </div>
+      </form>
+    </details>
+
     <div class="flex flex-wrap items-center justify-between gap-(--space-2) border-b border-line pb-(--space-2)">
       <label class="inline-flex min-h-10 cursor-pointer items-center gap-2 border border-line px-(--space-2) text-sm font-bold text-muted">
         <input
@@ -201,6 +406,9 @@ const formatTime = (value: string) => {
         </AppButton>
         <AppButton size="sm" :disabled="selectedVisibleCount === 0 || props.saving" @click="bulkSetStatus('spam')">
           批量垃圾
+        </AppButton>
+        <AppButton size="sm" :disabled="props.comments.length === 0 || props.saving" @click="moderateVisibleComments">
+          按规则治理
         </AppButton>
         <AppButton size="sm" variant="text" :disabled="selectedVisibleCount === 0 || props.saving" @click="bulkDelete">
           批量删除
@@ -266,6 +474,33 @@ const formatTime = (value: string) => {
         <p class="m-0 whitespace-pre-wrap text-lg leading-[1.65] text-ink text-pretty">
           {{ comment.content }}
         </p>
+
+        <div
+          v-if="comment.moderation?.enabled"
+          class="grid gap-(--space-1) border border-line bg-code-surface p-(--space-2)"
+        >
+          <p class="m-0 flex flex-wrap items-center gap-(--space-1) text-[13px] font-bold uppercase tracking-normal text-muted">
+            <span>规则建议</span>
+            <span class="border px-1 py-0.5" :class="moderationClass(comment.moderation.status)">
+              {{ statusLabel(comment.moderation.status) }}
+            </span>
+            <span>Score {{ comment.moderation.score }}</span>
+          </p>
+          <div v-if="comment.moderation.reasons.length > 0" class="flex flex-wrap gap-(--space-1)">
+            <span
+              v-for="reason in comment.moderation.reasons"
+              :key="`${comment.id}-${reason.id}`"
+              class="border px-1 py-0.5 text-[12px] font-bold"
+              :class="reason.severity === 'spam' ? 'border-callout-danger-border bg-callout-danger-surface text-callout-danger-text' : 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'"
+              :title="reason.detail"
+            >
+              {{ reason.label }}
+            </span>
+          </div>
+          <p v-else class="m-0 text-sm font-bold text-muted">
+            未命中治理规则。
+          </p>
+        </div>
 
         <div class="grid gap-1 text-sm font-bold text-muted">
           <a

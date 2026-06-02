@@ -1,3 +1,4 @@
+import { isArticlePublic } from './adminStorage'
 import type { AdminArticle } from './adminStorage'
 
 type FeedAuthor = {
@@ -55,7 +56,7 @@ export const getPublishedFeedArticles = async () => {
   const articles = await readArticles()
 
   return articles
-    .filter((article) => article.published !== false && article.locked !== true)
+    .filter((article) => isArticlePublic(article) && article.locked !== true)
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 

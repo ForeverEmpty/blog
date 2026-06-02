@@ -13,6 +13,9 @@ export default defineEventHandler(async (event) => {
 
   const nextSourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim() : target.sourceUrl
   const nextLaunchUrl = typeof body.launchUrl === 'string' ? body.launchUrl.trim() : target.launchUrl
+  const normalizedSourceUrl = nextSourceUrl || nextLaunchUrl
+  const normalizedLaunchUrl = nextLaunchUrl || nextSourceUrl
+  const shouldResetInspection = normalizedSourceUrl !== target.sourceUrl || normalizedLaunchUrl !== target.launchUrl
 
   Object.assign(target, {
     id: target.id,
@@ -20,8 +23,8 @@ export default defineEventHandler(async (event) => {
     description: typeof body.description === 'string' ? body.description.trim() : target.description,
     status: typeof body.status === 'string' && body.status.trim() ? body.status.trim() : target.status,
     category: typeof body.category === 'string' && body.category.trim() ? body.category.trim() : target.category,
-    sourceUrl: nextSourceUrl || nextLaunchUrl,
-    launchUrl: nextLaunchUrl || nextSourceUrl,
+    sourceUrl: normalizedSourceUrl,
+    launchUrl: normalizedLaunchUrl,
     tags: Array.isArray(body.tags)
       ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean)
       : target.tags,
@@ -29,7 +32,14 @@ export default defineEventHandler(async (event) => {
     hidden: typeof body.hidden === 'boolean' ? body.hidden : target.hidden,
     order: Number.isFinite(Number(body.order)) ? Number(body.order) : target.order,
     coverUrl: typeof body.coverUrl === 'string' ? body.coverUrl.trim() : target.coverUrl,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    checkStatus: shouldResetInspection ? 'unchecked' : target.checkStatus,
+    checkedAt: shouldResetInspection ? '' : target.checkedAt,
+    checkMessage: shouldResetInspection ? '' : target.checkMessage,
+    launchStatus: shouldResetInspection ? undefined : target.launchStatus,
+    launchTimeMs: shouldResetInspection ? undefined : target.launchTimeMs,
+    sourceStatus: shouldResetInspection ? undefined : target.sourceStatus,
+    sourceTimeMs: shouldResetInspection ? undefined : target.sourceTimeMs
   })
 
   await writeProjects(projects)

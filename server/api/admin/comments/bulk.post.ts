@@ -4,6 +4,7 @@ const allowedStatuses = new Set(['approved', 'waiting', 'spam'])
 const allowedActions = new Set(['status', 'delete'])
 
 export default defineEventHandler(async (event) => {
+  const rules = getCommentModerationRules(event)
   const body = await readBody<{
     action?: 'status' | 'delete'
     ids?: string[]
@@ -53,7 +54,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const comments = await updateWalineCommentStatuses(ids, body.status as WalineCommentStatus)
+  const comments = (await updateWalineCommentStatuses(ids, body.status as WalineCommentStatus))
+    .map((comment) => withCommentModeration(comment, rules))
 
   await writeAdminLog({
     action: 'comment.bulk.status',

@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
 
   const article = (await readArticles()).find((item) => item.slug === slug)
 
-  if (!article || article.published === false || article.locked) {
+  if (!article || !isArticlePublic(article) || article.locked) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Article not found'
@@ -67,6 +67,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const commentsBySlug = await readComments()
+  const moderation = evaluateCommentModeration({
+    author,
+    website,
+    content,
+    ip: getRequestIP(event, { xForwardedFor: true }) || '',
+    userAgent: getRequestHeader(event, 'user-agent') || ''
+  }, getCommentModerationRules(event))
   const comment = {
     id: createId('comment', author),
     slug,
@@ -74,7 +81,7 @@ export default defineEventHandler(async (event) => {
     website,
     content,
     createdAt: new Date().toISOString(),
-    status: 'published' as const
+    status: moderation.status === 'approved' ? 'published' as const : moderation.status
   }
 
   commentsBySlug[slug] = [

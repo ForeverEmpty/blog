@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const now = new Date().toISOString()
   const articles = await readArticles()
   const projects = await readProjects()
-  const publishedArticles = articles.filter((article) => article.published !== false)
+  const publishedArticles = articles.filter(isArticlePublic)
   const entries: SitemapEntry[] = [
     { loc: absoluteSiteUrl('/'), lastmod: now, changefreq: 'daily', priority: '1.0' },
     { loc: absoluteSiteUrl('/blog'), lastmod: now, changefreq: 'daily', priority: '0.9' },

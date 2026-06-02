@@ -1,4 +1,5 @@
 import pg from 'pg'
+import type { CommentModerationResult } from '~~/server/utils/commentModeration'
 
 export type WalineCommentStatus = 'approved' | 'waiting' | 'spam'
 
@@ -16,6 +17,7 @@ export type WalineComment = {
   like: number
   status: WalineCommentStatus
   createdAt: string
+  moderation?: CommentModerationResult
 }
 
 const { Client } = pg

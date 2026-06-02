@@ -1,8 +1,11 @@
+import { adminMarkdownTemplates } from './config/adminMarkdownTemplates'
+import { commentModerationRules } from './config/commentModerationRules'
+
 export default defineAppConfig({
   site: {
     name: 'ChankoBlog',
     initials: 'CB',
-    description: '一个面向写作、思考与发布的 Nuxt 4 博客。',
+    description: '记录一些清醒的片刻，也收藏路过心上的风。',
     homeHref: '/',
     homeAriaLabel: 'ChankoBlog 首页',
     author: 'Chanko',
@@ -82,6 +85,9 @@ export default defineAppConfig({
     temperature: 0.2,
     maxTokens: 700
   },
+  admin: {
+    markdownTemplates: adminMarkdownTemplates
+  },
   comments: {
     enabled: true,
     provider: 'waline',
@@ -94,7 +100,8 @@ export default defineAppConfig({
       commentSorting: 'latest',
       meta: ['nick', 'mail', 'link'],
       requiredMeta: ['nick', 'mail']
-    }
+    },
+    moderation: commentModerationRules
   },
   archive: {
     eyebrow: 'Archive',
@@ -175,7 +182,7 @@ export default defineAppConfig({
     items: []
   },
   footer: {
-    description: '',
+    description: '记录一些清醒的片刻，也收藏路过心上的风。',
     homeAriaLabel: '回到 ChankoBlog 首页顶部',
     links: [
       { label: '首页', href: '/' },

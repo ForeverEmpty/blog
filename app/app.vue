@@ -27,5 +27,12 @@ useSiteSeo({
 </script>
 
 <template>
-  <NuxtPage />
+  <NuxtLayout>
+    <NuxtPage
+      :transition="{
+        name: 'page',
+        mode: 'out-in'
+      }"
+    />
+  </NuxtLayout>
 </template>

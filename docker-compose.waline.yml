@@ -20,11 +20,7 @@ services:
       retries: 20
 
   waline:
-    build:
-      context: ./docker/waline
-      args:
-        WALINE_IMAGE: ${WALINE_IMAGE:-lizheming/waline:latest}
-    image: chanko/waline:patched
+    image: ${WALINE_IMAGE:-lizheming/waline:latest}
     container_name: chanko-waline
     restart: unless-stopped
     ports:

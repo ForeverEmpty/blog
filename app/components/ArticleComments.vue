@@ -73,9 +73,6 @@ const mountWaline = async () => {
       comment: true,
       pageview: false,
       search: false,
-      imageUploader: false,
-      highlighter: false,
-      texRenderer: false,
       locale: {
         placeholder: "写下你的想法",
         sofa: "还没有评论。",
