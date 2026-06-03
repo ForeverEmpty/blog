@@ -1,14 +1,16 @@
 export default defineEventHandler(async (event) => {
-  const backup = await createAdminBackup()
+  const scope = normalizeAdminBackupScope(getQuery(event).scope)
+  const backup = await createAdminBackup(scope)
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 
-  setHeader(event, 'Content-Disposition', `attachment; filename="chankoblog-backup-${timestamp}.json"`)
+  setHeader(event, 'Content-Disposition', `attachment; filename="chankoblog-backup-${scope}-${timestamp}.json"`)
   await writeAdminLog({
     action: 'backup.export',
     targetType: 'backup',
-    targetId: timestamp,
-    message: `导出备份：${backup.files.length} 个文件`,
+    targetId: `${scope}-${timestamp}`,
+    message: `导出${scope === 'full' ? '完整' : '局部'}备份：${backup.files.length} 个文件`,
     payload: {
+      scope,
       fileCount: backup.files.length,
       database: {
         walineComments: backup.database?.walineComments.length || 0,

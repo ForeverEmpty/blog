@@ -13,7 +13,11 @@ const { data: articles } = await useAsyncData("blog-list", () =>
 );
 
 const sortedArticles = computed(() => sortArticles(articles.value));
-const publicArticles = computed(() => sortedArticles.value.filter(isPublicArticle));
+const publicArticles = computed(() => (
+  sortedArticles.value
+    .filter(isPublicArticle)
+    .map(withContentSearchText)
+));
 const queryValueList = (value: unknown) => (
   Array.isArray(value) ? value : [value]
 ).filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -167,6 +171,7 @@ useSiteSeo({
             :articles="paginatedArticles"
             label="文章列表"
             :start-index="(currentPage - 1) * pageSize"
+            :search-query="structuredSearchQuery"
           />
 
           <AppPagination

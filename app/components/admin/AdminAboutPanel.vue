@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   saveAbout: []
+  exportBackup: []
 }>()
 
 const aboutTitle = defineModel<string>('aboutTitle', { required: true })
@@ -30,10 +31,16 @@ const aboutMarkdown = defineModel<string>('aboutMarkdown', { required: true })
         <p class="m-0 max-w-180 text-sm leading-[1.6] text-muted text-pretty">
           这里会直接修改前台关于页使用的 Nuxt Content 文件。保存后刷新关于页即可看到最新内容。
         </p>
-        <AppButton variant="solid" :loading="props.saving" @click="emit('saveAbout')">
-          <Icon name="lucide:save" mode="svg" class="h-4 w-4" aria-hidden="true" />
-          保存关于
-        </AppButton>
+        <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton variant="outline" :disabled="props.saving" @click="emit('exportBackup')">
+            <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            备份
+          </AppButton>
+          <AppButton variant="solid" :loading="props.saving" @click="emit('saveAbout')">
+            <Icon name="lucide:save" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            保存关于
+          </AppButton>
+        </div>
       </div>
 
       <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-(--space-3) p-(--space-2) max-[1080px]:grid-cols-1">

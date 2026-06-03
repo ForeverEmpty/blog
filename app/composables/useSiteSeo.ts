@@ -92,6 +92,12 @@ export const useSiteSeo = (options: SiteSeoOptions = {}) => {
         type: 'application/feed+json',
         title: `${appConfig.site.name} JSON Feed`,
         href: useAbsoluteSiteUrl(appConfig.seo.feed.json)
+      },
+      {
+        rel: 'alternate',
+        type: 'text/x-opml',
+        title: `${appConfig.site.name} OPML`,
+        href: useAbsoluteSiteUrl(appConfig.seo.feed.opml)
       }
     ],
     script: options.jsonLd

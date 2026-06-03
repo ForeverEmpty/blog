@@ -2,6 +2,28 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 
+import {
+  readAboutPage,
+  readAdminNotificationEvents,
+  readArticles,
+  readFriends,
+  readNotifications,
+  readProjects
+} from './adminStorage'
+
+export type AdminMediaUsageSource = {
+  type: 'article' | 'about' | 'project' | 'friend' | 'notification' | 'adminNotification'
+  title: string
+  location: string
+  field: string
+  href?: string
+  snippet: string
+}
+
+type AdminMediaUsageContext = Omit<AdminMediaUsageSource, 'snippet'> & {
+  text: string
+}
+
 export type AdminMediaAsset = {
   name: string
   url: string
@@ -10,6 +32,8 @@ export type AdminMediaAsset = {
   size: number
   updatedAt: string
   markdown: string
+  usageCount: number
+  usedBy: AdminMediaUsageSource[]
 }
 
 type UploadedMediaFile = {
@@ -66,7 +90,7 @@ const getMediaType = (mime: string): AdminMediaAsset['type'] => {
   return 'file'
 }
 
-const getMediaMarkdown = (asset: Omit<AdminMediaAsset, 'markdown'>) => {
+const getMediaMarkdown = (asset: Omit<AdminMediaAsset, 'markdown' | 'usageCount' | 'usedBy'>) => {
   if (asset.type === 'image') {
     return `![${asset.name}](${asset.url})`
   }
@@ -80,6 +104,199 @@ const getMediaMarkdown = (asset: Omit<AdminMediaAsset, 'markdown'>) => {
   }
 
   return `[${asset.name}](${asset.url})`
+}
+
+const normalizeText = (value: unknown) => String(value || '')
+
+const createSnippet = (text: string, needle: string) => {
+  const normalized = normalizeText(text)
+  const index = normalized.toLowerCase().indexOf(needle.toLowerCase())
+
+  if (index < 0) {
+    return normalized.slice(0, 120)
+  }
+
+  const start = Math.max(0, index - 48)
+  const end = Math.min(normalized.length, index + needle.length + 48)
+  const prefix = start > 0 ? '...' : ''
+  const suffix = end < normalized.length ? '...' : ''
+
+  return `${prefix}${normalized.slice(start, end)}${suffix}`
+}
+
+const getAssetNeedles = (asset: Pick<AdminMediaAsset, 'name' | 'url' | 'markdown'>) => {
+  const rawUrl = `/media/${asset.name}`
+  const encodedUrl = `/media/${encodeURIComponent(asset.name)}`
+
+  return Array.from(new Set([
+    asset.url,
+    rawUrl,
+    encodedUrl,
+    decodeURIComponent(asset.url),
+    asset.markdown,
+    asset.name
+  ].filter(Boolean)))
+}
+
+const findMediaUsageInText = (
+  asset: Pick<AdminMediaAsset, 'name' | 'url' | 'markdown'>,
+  text: unknown
+) => {
+  const content = normalizeText(text)
+
+  if (!content) {
+    return null
+  }
+
+  return getAssetNeedles(asset).find((needle) => content.includes(needle)) || null
+}
+
+const createUsageSource = (
+  asset: Pick<AdminMediaAsset, 'name' | 'url' | 'markdown'>,
+  source: Omit<AdminMediaUsageSource, 'snippet'> & { text?: string },
+  text: unknown
+): AdminMediaUsageSource | null => {
+  const needle = findMediaUsageInText(asset, text)
+
+  if (!needle) {
+    return null
+  }
+
+  const { text: _text, ...publicSource } = source
+
+  return {
+    ...publicSource,
+    snippet: createSnippet(normalizeText(text), needle)
+  }
+}
+
+const readMediaUsageContexts = async () => {
+  const contexts: AdminMediaUsageContext[] = []
+  const [articles, about, projects, friends, notifications, adminNotifications] = await Promise.all([
+    readArticles().catch(() => []),
+    readAboutPage().catch(() => null),
+    readProjects().catch(() => []),
+    readFriends().catch(() => []),
+    readNotifications().catch(() => []),
+    readAdminNotificationEvents().catch(() => [])
+  ])
+
+  for (const article of articles) {
+    contexts.push({
+      type: 'article',
+      title: article.title,
+      location: `文章 / ${article.slug}`,
+      field: 'Markdown',
+      href: `/blog/${article.slug}`,
+      text: [
+        article.title,
+        article.description,
+        article.markdown
+      ].join('\n')
+    })
+  }
+
+  if (about) {
+    contexts.push({
+      type: 'about',
+      title: about.title || '关于',
+      location: '关于页',
+      field: 'Markdown',
+      href: '/about',
+      text: [
+        about.title,
+        about.description,
+        about.markdown
+      ].join('\n')
+    })
+  }
+
+  for (const project of projects) {
+    contexts.push({
+      type: 'project',
+      title: project.name,
+      location: `项目 / ${project.id}`,
+      field: '封面或内容',
+      href: '/projects',
+      text: [
+        project.name,
+        project.description,
+        project.coverUrl,
+        project.sourceUrl,
+        project.launchUrl,
+        project.tags.join('\n')
+      ].join('\n')
+    })
+  }
+
+  for (const friend of friends) {
+    contexts.push({
+      type: 'friend',
+      title: friend.name,
+      location: `友链 / ${friend.id}`,
+      field: '图标或简介',
+      href: '/friends',
+      text: [
+        friend.name,
+        friend.icon,
+        friend.intro,
+        friend.description,
+        friend.url,
+        friend.tags.join('\n')
+      ].join('\n')
+    })
+  }
+
+  for (const notification of notifications) {
+    contexts.push({
+      type: 'notification',
+      title: notification.title,
+      location: `前台通知 / ${notification.id}`,
+      field: '内容或链接',
+      href: notification.href || undefined,
+      text: [
+        notification.title,
+        notification.body,
+        notification.href,
+        notification.hrefLabel
+      ].join('\n')
+    })
+  }
+
+  for (const notification of adminNotifications) {
+    contexts.push({
+      type: 'adminNotification',
+      title: notification.title,
+      location: `后台通知 / ${notification.id}`,
+      field: '内容或链接',
+      href: notification.href || undefined,
+      text: [
+        notification.title,
+        notification.body,
+        notification.href,
+        notification.hrefLabel
+      ].join('\n')
+    })
+  }
+
+  return contexts
+}
+
+const readMediaUsageSources = (
+  asset: Pick<AdminMediaAsset, 'name' | 'url' | 'markdown'>,
+  contexts: AdminMediaUsageContext[]
+) => {
+  const usedBy: AdminMediaUsageSource[] = []
+
+  for (const context of contexts) {
+    const source = createUsageSource(asset, context, context.text)
+
+    if (source) {
+      usedBy.push(source)
+    }
+  }
+
+  return usedBy
 }
 
 export const assertSafeMediaName = (name: string) => {
@@ -117,7 +334,7 @@ const mediaFilePath = (name: string) => {
   return filePath
 }
 
-const toAsset = async (name: string): Promise<AdminMediaAsset> => {
+const toAsset = async (name: string, usageContexts?: AdminMediaUsageContext[]): Promise<AdminMediaAsset> => {
   const ext = extname(name).toLowerCase()
   const mime = allowedMimeByExt[ext] || 'application/octet-stream'
   const fileStat = await stat(mediaFilePath(name))
@@ -130,9 +347,16 @@ const toAsset = async (name: string): Promise<AdminMediaAsset> => {
     updatedAt: fileStat.mtime.toISOString()
   }
 
-  return {
+  const asset = {
     ...baseAsset,
     markdown: getMediaMarkdown(baseAsset)
+  }
+  const usedBy = readMediaUsageSources(asset, usageContexts || await readMediaUsageContexts())
+
+  return {
+    ...asset,
+    usageCount: usedBy.length,
+    usedBy
   }
 }
 
@@ -140,10 +364,11 @@ export const readMediaAssets = async () => {
   await ensureMediaDir()
 
   const filenames = await readdir(mediaDir())
+  const usageContexts = await readMediaUsageContexts()
   const assets = await Promise.all(
     filenames
       .filter((filename) => allowedMimeByExt[extname(filename).toLowerCase()])
-      .map((filename) => toAsset(filename))
+      .map((filename) => toAsset(filename, usageContexts))
   )
 
   return assets.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

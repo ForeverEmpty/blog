@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
     ],
     items: articles.map((article) => {
       const url = absoluteSiteUrl(article.path)
+      const image = articleFeedImage(article)
 
       return {
         id: url,
@@ -27,13 +28,16 @@ export default defineEventHandler(async (event) => {
         title: article.title,
         summary: article.description,
         content_html: articleSummaryHtml(article),
+        content_text: articleFeedText(article),
+        image: image?.url,
+        banner_image: image?.url,
         date_published: articleUpdatedDate(article),
         date_modified: articleUpdatedDate(article),
         author: {
           name: article.author,
-          url: article.authorUrl ? absoluteSiteUrl(article.authorUrl) : context.author.url
+          url: articleFeedAuthorUrl(article, context.author.url)
         },
-        tags: [article.category, ...article.tags].filter(Boolean)
+        tags: articleFeedTags(article)
       }
     })
   }

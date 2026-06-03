@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SiteNotifications from '~/components/SiteNotifications.vue'
+
 type LayoutSearchProject = {
   id?: string
   name: string
@@ -8,6 +10,18 @@ type LayoutSearchProject = {
   sourceUrl: string
   launchUrl: string
   tags: string[]
+}
+
+type LayoutNotification = {
+  id: string
+  title: string
+  body: string
+  date?: string
+  level?: 'info' | 'success' | 'warning' | 'danger'
+  href?: string
+  hrefLabel?: string
+  pinned?: boolean
+  enabled?: boolean
 }
 
 const appConfig = useAppConfig()
@@ -21,11 +35,21 @@ const { data: siteSearchArticles } = await useAsyncData('site-search-articles', 
     default: () => []
   }
 )
-const sortedSiteSearchArticles = computed(() => sortArticles(siteSearchArticles.value).filter(isPublicArticle))
+const sortedSiteSearchArticles = computed(() => (
+  sortArticles(siteSearchArticles.value)
+    .filter(isPublicArticle)
+    .map(withContentSearchText)
+))
 const { data: siteSearchProjects } = await useAsyncData('site-search-projects', () =>
   $fetch<LayoutSearchProject[]>('/api/projects'),
   {
     default: () => appConfig.projects.items ?? []
+  }
+)
+const { data: siteNotifications } = await useAsyncData('site-notifications', () =>
+  $fetch<LayoutNotification[]>('/api/notifications'),
+  {
+    default: () => []
   }
 )
 </script>
@@ -33,7 +57,7 @@ const { data: siteSearchProjects } = await useAsyncData('site-search-projects', 
 <template>
   <main class="min-h-screen overflow-x-clip bg-paper bg-[linear-gradient(90deg,var(--line)_1px,transparent_1px)] bg-size-[96px_96px]">
     <header
-      class="sticky top-0 z-10 grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-(--space-4) border-b border-[color-mix(in_oklch,var(--line),transparent_24%)] bg-[color-mix(in_oklch,var(--paper),transparent_8%)] px-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-3) backdrop-blur-2xl max-[760px]:grid-cols-[auto_1fr_auto_auto] max-[760px]:gap-(--space-2) max-[760px]:p-(--space-2)"
+      class="sticky top-0 z-10 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-(--space-4) border-b border-[color-mix(in_oklch,var(--line),transparent_24%)] bg-paper px-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-3) max-[760px]:grid-cols-[auto_minmax(0,1fr)] max-[760px]:gap-x-(--space-2) max-[760px]:gap-y-(--space-1) max-[760px]:p-(--space-2)"
       aria-label="站点导航"
     >
       <NuxtLink
@@ -43,34 +67,40 @@ const { data: siteSearchProjects } = await useAsyncData('site-search-projects', 
       >
         {{ appConfig.site.initials }}
       </NuxtLink>
-      <nav class="flex flex-wrap gap-(--space-2) text-sm text-muted max-[760px]:order-3 max-[760px]:col-span-full" aria-label="主导航">
+      <nav class="flex flex-wrap gap-(--space-2) text-sm text-muted max-[760px]:order-3 max-[760px]:col-span-full max-[760px]:grid max-[760px]:grid-cols-3 max-[760px]:gap-1 max-[380px]:grid-cols-2" aria-label="主导航">
         <AppLinkButton
           v-for="item in appConfig.navigation.main"
           :key="item.label"
           variant="text"
+          class="max-[760px]:min-h-10 max-[760px]:w-full max-[760px]:px-1 max-[760px]:text-[14px]"
           :href="item.href"
           :active="isActiveNavigation(item.href)"
         >
           {{ item.label }}
         </AppLinkButton>
       </nav>
-      <AppButton
-        class="justify-self-end"
-        variant="icon"
-        aria-label="打开搜索"
-        @click="searchOpen = true"
-      >
-        <Icon name="lucide:search" mode="svg" class="h-5 w-5" aria-hidden="true" />
-      </AppButton>
-      <ThemeModeToggle class="justify-self-end" />
-      <AppLinkButton
-        class="max-[760px]:justify-self-end"
-        :href="appConfig.navigation.admin.href"
-        variant="outline"
-        :active="isActiveNavigation(appConfig.navigation.admin.href)"
-      >
-        {{ appConfig.navigation.admin.label }}
-      </AppLinkButton>
+      <div class="flex items-center justify-end gap-1 justify-self-end max-[760px]:min-w-0">
+        <AppButton
+          class="justify-self-end"
+          variant="icon"
+          aria-label="打开搜索"
+          @click="searchOpen = true"
+        >
+          <Icon name="lucide:search" mode="svg" class="h-5 w-5" aria-hidden="true" />
+        </AppButton>
+        <SiteNotifications
+          :items="siteNotifications"
+        />
+        <ThemeModeToggle class="justify-self-end" />
+        <AppLinkButton
+          class="max-[760px]:min-h-10 max-[760px]:justify-self-end max-[760px]:px-(--space-1) max-[760px]:text-[13px]"
+          :href="appConfig.navigation.admin.href"
+          variant="outline"
+          :active="isActiveNavigation(appConfig.navigation.admin.href)"
+        >
+          {{ appConfig.navigation.admin.label }}
+        </AppLinkButton>
+      </div>
     </header>
 
     <SiteSearchDialog

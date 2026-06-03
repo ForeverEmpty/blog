@@ -1,4 +1,5 @@
 import Fuse from 'fuse.js'
+import { getContentSearchText } from '~/utils/contentSearchText'
 
 type SearchableContentKind = 'article' | 'project'
 
@@ -18,6 +19,8 @@ type SearchableContentItem = {
   launchUrl?: string
   sourceUrl?: string
   markdown?: string
+  contentText?: string
+  body?: unknown
   published?: boolean
   locked?: boolean
   pinned?: boolean
@@ -30,6 +33,9 @@ type SearchableArticle = {
   tags?: string[]
   author?: string
   date?: string
+  markdown?: string
+  contentText?: string
+  body?: unknown
   published?: boolean
   locked?: boolean
   pinned?: boolean
@@ -48,6 +54,8 @@ type ArticleSearchFilters = {
   excludedTitles: string[]
   descriptions: string[]
   excludedDescriptions: string[]
+  contents: string[]
+  excludedContents: string[]
   authors: string[]
   excludedAuthors: string[]
   statuses: string[]
@@ -80,6 +88,8 @@ const parseArticleSearch = (input: string): ArticleSearchFilters => {
     excludedTitles: [],
     descriptions: [],
     excludedDescriptions: [],
+    contents: [],
+    excludedContents: [],
     authors: [],
     excludedAuthors: [],
     statuses: [],
@@ -131,6 +141,8 @@ const parseArticleSearch = (input: string): ArticleSearchFilters => {
       ;(excluded ? filters.excludedTitles : filters.titles).push(value)
     } else if (['description', 'desc', 'summary', 'intro', '摘要', '简介'].includes(key)) {
       ;(excluded ? filters.excludedDescriptions : filters.descriptions).push(value)
+    } else if (['content', 'body', 'text', 'markdown', '正文', '内容'].includes(key)) {
+      ;(excluded ? filters.excludedContents : filters.contents).push(value)
     } else if (['author', '作者'].includes(key)) {
       ;(excluded ? filters.excludedAuthors : filters.authors).push(value)
     } else if (['status', 'state', '状态'].includes(key)) {
@@ -229,6 +241,8 @@ const articleMatchesSearch = (article: SearchableArticle, filters: ArticleSearch
     fieldExcludesAll(article.title, filters.excludedTitles) &&
     fieldMatchesAny(article.description, filters.descriptions) &&
     fieldExcludesAll(article.description, filters.excludedDescriptions) &&
+    fieldMatchesAny(articleContentText(article), filters.contents) &&
+    fieldExcludesAll(articleContentText(article), filters.excludedContents) &&
     fieldMatchesAny(article.author, filters.authors) &&
     fieldExcludesAll(article.author, filters.excludedAuthors) &&
     fieldMatchesAny(article.date, filters.dates) &&
@@ -257,7 +271,15 @@ const searchableContentText = (item: SearchableContentItem) => [
   item.launchUrl,
   item.sourceUrl,
   item.markdown,
+  item.contentText,
+  getContentSearchText(item.body),
   ...(item.tags || [])
+].map(normalizeSearchValue).join(' ')
+
+const articleContentText = (article: SearchableArticle) => [
+  article.markdown,
+  article.contentText,
+  getContentSearchText(article.body)
 ].map(normalizeSearchValue).join(' ')
 
 const contentMatchesStructuredFilters = (item: SearchableContentItem, filters: ArticleSearchFilters) => (
@@ -271,6 +293,8 @@ const contentMatchesStructuredFilters = (item: SearchableContentItem, filters: A
   fieldExcludesAll(item.title || item.name, filters.excludedTitles) &&
   fieldMatchesAny(item.description, filters.descriptions) &&
   fieldExcludesAll(item.description, filters.excludedDescriptions) &&
+  fieldMatchesAny(articleContentText(item), filters.contents) &&
+  fieldExcludesAll(articleContentText(item), filters.excludedContents) &&
   fieldMatchesAny(item.author, filters.authors) &&
   fieldExcludesAll(item.author, filters.excludedAuthors) &&
   fieldMatchesAny(item.date, filters.dates) &&
@@ -292,10 +316,47 @@ const getSearchHighlightTerms = (input: string) => {
     ...filters.tags,
     ...filters.titles,
     ...filters.descriptions,
+    ...filters.contents,
     ...filters.authors,
     ...filters.statuses,
     ...filters.dates
   ].map((term) => term.trim()).filter((term) => term.length > 1)))
+}
+
+const getSearchMatchExcerpt = (item: SearchableContentItem, input: string, maxLength = 128) => {
+  const terms = getSearchHighlightTerms(input).map(normalizeSearchValue).filter(Boolean)
+  const text = [
+    item.contentText,
+    item.markdown,
+    getContentSearchText(item.body)
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!text || terms.length === 0) {
+    return ''
+  }
+
+  const lowerText = text.toLocaleLowerCase()
+  const match = terms
+    .map((term) => ({
+      term,
+      index: lowerText.indexOf(term)
+    }))
+    .filter((item) => item.index >= 0)
+    .sort((a, b) => a.index - b.index)[0]
+
+  if (!match) {
+    return ''
+  }
+
+  const halfLength = Math.floor(maxLength / 2)
+  const start = Math.max(0, match.index - halfLength)
+  const end = Math.min(text.length, match.index + match.term.length + halfLength)
+  const prefix = start > 0 ? '...' : ''
+  const suffix = end < text.length ? '...' : ''
+
+  return `${prefix}${text.slice(start, end)}${suffix}`
 }
 
 const searchContentItems = <T extends SearchableContentItem>(items: T[], input: string) => {
@@ -319,6 +380,7 @@ const searchContentItems = <T extends SearchableContentItem>(items: T[], input: 
       { name: 'path', weight: 0.5 },
       { name: 'sourceUrl', weight: 0.4 },
       { name: 'launchUrl', weight: 0.4 },
+      { name: 'contentText', weight: 0.35 },
       { name: 'markdown', weight: 0.25 }
     ],
     threshold: 0.34,
@@ -340,5 +402,6 @@ export const useArticleSearch = () => ({
   parseArticleSearch,
   articleMatchesSearch,
   getSearchHighlightTerms,
+  getSearchMatchExcerpt,
   searchContentItems
 })

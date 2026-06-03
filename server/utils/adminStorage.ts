@@ -71,6 +71,51 @@ export type AdminFriend = {
   backlinkCheckedAt?: string
 }
 
+export type AdminNotificationLevel = 'info' | 'success' | 'warning' | 'danger'
+export type AdminNotificationAudience = 'site' | 'admin' | 'both'
+
+export type AdminNotification = {
+  id: string
+  title: string
+  body: string
+  date: string
+  level: AdminNotificationLevel
+  href: string
+  hrefLabel: string
+  pinned: boolean
+  enabled: boolean
+  audience: AdminNotificationAudience
+}
+
+export type AdminNotificationEventKey =
+  | 'friend.apply'
+  | 'comment.waiting'
+  | 'ai.summary.error'
+  | 'build.failure'
+
+export type AdminNotificationEventSetting = {
+  key: AdminNotificationEventKey
+  label: string
+  description: string
+  siteEnabled: boolean
+  emailEnabled: boolean
+  important: boolean
+}
+
+export type AdminNotificationSettings = {
+  emailEnabled: boolean
+  emailTo: string
+  emailFrom: string
+  events: AdminNotificationEventSetting[]
+}
+
+export type AdminNotificationEvent = AdminNotification & {
+  source: AdminNotificationEventKey
+  important: boolean
+  emailed: boolean
+  createdAt: string
+}
+
 export type AdminAboutPage = {
   title: string
   description: string
@@ -91,6 +136,7 @@ export type ArticleViewRecord = {
   total: number
   updatedAt: string
   recentVisitors: Record<string, number>
+  daily?: Record<string, number>
 }
 
 export type ArticleViews = Record<string, ArticleViewRecord>
@@ -115,6 +161,9 @@ const projectsPath = () => resolve(dataDir(), 'projects.json')
 const friendsPath = () => resolve(dataDir(), 'friends.json')
 const commentsPath = () => resolve(dataDir(), 'comments.json')
 const viewsPath = () => resolve(dataDir(), 'views.json')
+const notificationsPath = () => resolve(dataDir(), 'notifications.json')
+const adminNotificationsPath = () => resolve(dataDir(), 'admin-notifications.json')
+const notificationSettingsPath = () => resolve(dataDir(), 'notification-settings.json')
 const workflowStatuses = new Set<ArticleWorkflowStatus>(['draft', 'review', 'scheduled', 'published', 'archived'])
 
 const ensureDataDir = async () => {
@@ -626,6 +675,128 @@ const normalizeFriend = (friend: Partial<AdminFriend>, index: number): AdminFrie
   }
 }
 
+const normalizeNotificationLevel = (level: unknown): AdminNotificationLevel => {
+  if (level === 'success' || level === 'warning' || level === 'danger') {
+    return level
+  }
+
+  return 'info'
+}
+
+const normalizeNotificationAudience = (audience: unknown): AdminNotificationAudience => {
+  if (audience === 'admin' || audience === 'both') {
+    return audience
+  }
+
+  return 'site'
+}
+
+const normalizeNotification = (notification: Partial<AdminNotification>, index: number): AdminNotification => {
+  const title = String(notification.title || '站内通知').trim()
+  const body = String(notification.body || '').trim()
+  const date = String(notification.date || new Date().toISOString().slice(0, 10)).trim()
+
+  return {
+    id: String(notification.id || createId('notice', title || body || String(index))).trim(),
+    title,
+    body,
+    date,
+    level: normalizeNotificationLevel(notification.level),
+    href: String(notification.href || '').trim(),
+    hrefLabel: String(notification.hrefLabel || '').trim(),
+    pinned: notification.pinned === true,
+    enabled: notification.enabled !== false,
+    audience: normalizeNotificationAudience(notification.audience)
+  }
+}
+
+export const defaultNotificationEventSettings = (): AdminNotificationEventSetting[] => [
+  {
+    key: 'friend.apply',
+    label: '友链申请',
+    description: '前台提交新的友链申请时触发。',
+    siteEnabled: true,
+    emailEnabled: true,
+    important: true
+  },
+  {
+    key: 'comment.waiting',
+    label: '待审评论',
+    description: '评论进入待审核状态时触发。',
+    siteEnabled: true,
+    emailEnabled: true,
+    important: true
+  },
+  {
+    key: 'ai.summary.error',
+    label: 'AI 摘要失败',
+    description: '文章 AI 摘要生成失败或缺少 API Key 时触发。',
+    siteEnabled: true,
+    emailEnabled: true,
+    important: true
+  },
+  {
+    key: 'build.failure',
+    label: '构建失败',
+    description: '构建失败事件写入时触发。',
+    siteEnabled: true,
+    emailEnabled: true,
+    important: true
+  }
+]
+
+const normalizeNotificationSettings = (settings: Partial<AdminNotificationSettings>): AdminNotificationSettings => {
+  const defaultEvents = defaultNotificationEventSettings()
+  const inputEvents = Array.isArray(settings.events) ? settings.events : []
+
+  return {
+    emailEnabled: settings.emailEnabled === true,
+    emailTo: String(settings.emailTo || '').trim(),
+    emailFrom: String(settings.emailFrom || '').trim(),
+    events: defaultEvents.map((event) => {
+      const input = inputEvents.find((item) => item?.key === event.key)
+
+      return {
+        ...event,
+        siteEnabled: typeof input?.siteEnabled === 'boolean' ? input.siteEnabled : event.siteEnabled,
+        emailEnabled: typeof input?.emailEnabled === 'boolean' ? input.emailEnabled : event.emailEnabled,
+        important: typeof input?.important === 'boolean' ? input.important : event.important
+      }
+    })
+  }
+}
+
+const normalizeAdminNotificationEvent = (
+  notification: Partial<AdminNotificationEvent>,
+  index: number
+): AdminNotificationEvent => {
+  const normalized = normalizeNotification({
+    ...notification,
+    audience: 'admin'
+  }, index)
+  const defaultSource: AdminNotificationEventKey = 'friend.apply'
+  const source = defaultNotificationEventSettings().some((event) => event.key === notification.source)
+    ? notification.source as AdminNotificationEventKey
+    : defaultSource
+
+  return {
+    ...normalized,
+    source,
+    important: notification.important === true,
+    emailed: notification.emailed === true,
+    createdAt: String(notification.createdAt || new Date().toISOString())
+  }
+}
+
+export const sortNotifications = <T extends Pick<AdminNotification, 'pinned' | 'enabled' | 'date' | 'title'>>(notifications: T[]) => (
+  [...notifications].sort((a, b) => (
+    Number(b.enabled) - Number(a.enabled) ||
+    Number(b.pinned) - Number(a.pinned) ||
+    String(b.date || '').localeCompare(String(a.date || '')) ||
+    String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN')
+  ))
+)
+
 export const sortFriends = <T extends Pick<AdminFriend, 'status' | 'featured' | 'order' | 'submittedAt' | 'name'>>(friends: T[]) => {
   const statusWeight: Record<AdminFriend['status'], number> = {
     待审核: 0,
@@ -650,6 +821,28 @@ export const readFriends = async () => {
 
 export const writeFriends = (friends: Partial<AdminFriend>[]) => (
   writeJsonFile(friendsPath(), sortFriends(friends.map(normalizeFriend)))
+)
+export const readNotifications = async () => {
+  const notifications = await readJsonFile<Partial<AdminNotification>[]>(notificationsPath(), [])
+
+  return sortNotifications(notifications.map(normalizeNotification))
+}
+export const writeNotifications = (notifications: Partial<AdminNotification>[]) => (
+  writeJsonFile(notificationsPath(), sortNotifications(notifications.map(normalizeNotification)))
+)
+export const readAdminNotificationEvents = async () => {
+  const notifications = await readJsonFile<Partial<AdminNotificationEvent>[]>(adminNotificationsPath(), [])
+
+  return sortNotifications(notifications.map(normalizeAdminNotificationEvent)).slice(0, 100)
+}
+export const writeAdminNotificationEvents = (notifications: Partial<AdminNotificationEvent>[]) => (
+  writeJsonFile(adminNotificationsPath(), sortNotifications(notifications.map(normalizeAdminNotificationEvent)).slice(0, 100))
+)
+export const readNotificationSettings = async () => (
+  normalizeNotificationSettings(await readJsonFile<Partial<AdminNotificationSettings>>(notificationSettingsPath(), {}))
+)
+export const writeNotificationSettings = (settings: Partial<AdminNotificationSettings>) => (
+  writeJsonFile(notificationSettingsPath(), normalizeNotificationSettings(settings))
 )
 export const readComments = () => readJsonFile<Record<string, BlogComment[]>>(commentsPath(), {})
 export const writeComments = (comments: Record<string, BlogComment[]>) => writeJsonFile(commentsPath(), comments)
@@ -684,6 +877,11 @@ export const recordArticleView = async (slug: string, visitorKey: string) => {
   if (counted) {
     current.total = Math.max(0, Number(current.total) || 0) + 1
     current.updatedAt = new Date(now).toISOString()
+    const dateKey = new Date(now).toISOString().slice(0, 10)
+    const daily = current.daily || {}
+
+    daily[dateKey] = Math.max(0, Number(daily[dateKey]) || 0) + 1
+    current.daily = daily
   }
 
   recentVisitors[visitorKey] = now

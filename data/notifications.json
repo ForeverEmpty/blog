@@ -1,0 +1,26 @@
+[
+  {
+    "id": "content-search-online",
+    "title": "文章正文搜索已上线",
+    "body": "现在可以通过普通关键词或 content= 精确筛选搜索文章正文内容。",
+    "date": "2026-06-02",
+    "level": "info",
+    "href": "/blog?q=content%3D%22%E7%A1%AC%E6%8D%A2%E8%A1%8C%22",
+    "hrefLabel": "查看示例",
+    "pinned": true,
+    "enabled": true,
+    "audience": "site"
+  },
+  {
+    "id": "rss-feed-ready",
+    "title": "订阅入口可用",
+    "body": "RSS、Atom 和 JSON Feed 已接入页脚，便于在阅读器中订阅更新。",
+    "date": "2026-06-02",
+    "level": "success",
+    "href": "/rss.xml",
+    "hrefLabel": "打开 RSS",
+    "pinned": false,
+    "enabled": true,
+    "audience": "site"
+  }
+]

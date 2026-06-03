@@ -28,6 +28,7 @@ const emit = defineEmits<{
   inspectFriend: [friend: ManagedFriend]
   inspectFriends: [friends: ManagedFriend[]]
   deleteFriend: [friend: ManagedFriend]
+  exportBackup: []
 }>()
 
 const friendSearchQuery = defineModel<string>('friendSearchQuery', { required: true })
@@ -148,11 +149,15 @@ const formatTime = (value: string) => {
           <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
             Friend Workflow
           </p>
-          <h2 class="m-0 font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+          <h2 class="m-0 font-display text-[40px] font-normal leading-none max-[520px]:text-[32px]">
             友链审核
           </h2>
         </div>
         <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton variant="outline" :disabled="props.saving || props.inspecting" @click="emit('exportBackup')">
+            <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            备份
+          </AppButton>
           <AppButton
             variant="outline"
             :loading="props.inspecting"
@@ -195,19 +200,19 @@ const formatTime = (value: string) => {
       <div class="grid grid-cols-4 border-y border-line max-[920px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="友链统计">
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[520px]:border-r-0 max-[520px]:border-b" @click="friendStatusFilter = 'all'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">全部</span>
-          <span class="font-display text-[44px] leading-none text-ink">{{ props.stats.total }}</span>
+          <span class="font-display text-[36px] leading-none text-ink">{{ props.stats.total }}</span>
         </button>
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[920px]:border-r-0 max-[920px]:border-b" @click="friendStatusFilter = '待审核'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">待审核</span>
-          <span class="font-display text-[44px] leading-none text-callout-warning-text">{{ props.stats.pending }}</span>
+          <span class="font-display text-[36px] leading-none text-callout-warning-text">{{ props.stats.pending }}</span>
         </button>
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[520px]:border-r-0 max-[520px]:border-b" @click="friendStatusFilter = '已通过'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">已通过</span>
-          <span class="font-display text-[44px] leading-none text-callout-success-text">{{ props.stats.approved }}</span>
+          <span class="font-display text-[36px] leading-none text-callout-success-text">{{ props.stats.approved }}</span>
         </button>
         <button type="button" class="grid gap-1 p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none" @click="friendStatusFilter = '已拒绝'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">已拒绝</span>
-          <span class="font-display text-[44px] leading-none text-callout-danger-text">{{ props.stats.rejected }}</span>
+          <span class="font-display text-[36px] leading-none text-callout-danger-text">{{ props.stats.rejected }}</span>
         </button>
       </div>
 
@@ -239,11 +244,11 @@ const formatTime = (value: string) => {
           :key="friend.id"
           type="button"
           class="relative grid gap-1 border-b border-line bg-transparent px-(--space-2) py-(--space-2) text-left text-ink transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none"
-          :class="friend.id === props.selectedFriendId ? 'bg-code-surface pl-(--space-3) before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-ink' : ''"
+          :class="friend.id === props.selectedFriendId ? 'bg-ink! text-paper! hover:bg-ink! hover:text-paper! focus-visible:bg-ink! focus-visible:text-paper!' : ''"
           @click="emit('selectFriend', friend)"
         >
           <span class="truncate text-sm font-bold">{{ friend.name }}</span>
-          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="friend.id === props.selectedFriendId ? 'text-ink' : ''">
+          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="friend.id === props.selectedFriendId ? 'text-paper!' : ''">
             <span class="truncate">{{ friend.status }} / {{ friend.category }} / #{{ friend.order }}</span>
             <span class="border px-1 py-0.5 text-[11px] font-bold leading-none" :class="checkStatusClass(friend.checkStatus)">
               {{ checkStatusLabel(friend.checkStatus) }}
@@ -333,7 +338,7 @@ const formatTime = (value: string) => {
                 <span>{{ friendCategory }} / #{{ friendOrder }}</span>
                 <span v-if="friendFeatured">置顶</span>
               </p>
-              <h3 class="m-0 break-words font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+              <h3 class="m-0 break-words font-display text-[36px] font-normal leading-none max-[520px]:text-[30px]">
                 {{ friendName || 'New Friend' }}
               </h3>
             </div>
@@ -380,7 +385,7 @@ const formatTime = (value: string) => {
               置顶
             </span>
           </div>
-          <h2 class="m-0 break-words font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+          <h2 class="m-0 break-words font-display text-[36px] font-normal leading-none max-[520px]:text-[30px]">
             {{ friend.name }}
           </h2>
           <p v-if="friend.intro" class="m-0 text-base font-bold leading-[1.5] text-ink text-pretty">

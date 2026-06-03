@@ -8,6 +8,9 @@ type ArticleListItem = {
   locked?: boolean
   pinned?: boolean
   tags: string[]
+  markdown?: string
+  contentText?: string
+  body?: unknown
 }
 
 const props = withDefaults(defineProps<{
@@ -16,13 +19,20 @@ const props = withDefaults(defineProps<{
   startIndex?: number
   headingLevel?: 2 | 3
   padded?: boolean
+  searchQuery?: string
 }>(), {
   startIndex: 0,
   headingLevel: 2,
   padded: true,
+  searchQuery: '',
 })
 
 const headingTag = computed(() => `h${props.headingLevel}`)
+const { getSearchHighlightTerms, getSearchMatchExcerpt } = useArticleSearch()
+const highlightTerms = computed(() => getSearchHighlightTerms(props.searchQuery))
+const articleSearchExcerpt = (article: ArticleListItem) => (
+  props.searchQuery ? getSearchMatchExcerpt(article, props.searchQuery) : ''
+)
 
 const categoryFilterHref = (category?: string) => ({
   path: '/blog',
@@ -57,14 +67,14 @@ const tagFilterHref = (tag: string) => ({
       <div class="pointer-events-none relative z-2 grid min-w-0 gap-(--space-1)">
         <div class="flex flex-wrap items-center gap-x-(--space-2) gap-y-(--space-1)">
           <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-            {{ article.date }}
+            <AppSearchHighlight :text="article.date" :terms="highlightTerms" />
           </p>
           <NuxtLink
             class="pointer-events-auto relative z-2 text-[13px] font-bold uppercase tracking-normal text-muted underline-offset-4 transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
             :href="categoryFilterHref(article.category)"
             :aria-label="`筛选分类：${article.category || '未分类'}`"
           >
-            {{ article.category || "未分类" }}
+            <AppSearchHighlight :text="article.category || '未分类'" :terms="highlightTerms" />
           </NuxtLink>
           <span
             v-if="article.pinned"
@@ -86,11 +96,18 @@ const tagFilterHref = (tag: string) => ({
           class="m-0 min-w-0 truncate font-display text-[72px] font-normal leading-[0.95] tracking-normal max-[1100px]:text-[56px] max-[520px]:text-[36px]"
         >
           <span class="block truncate">
-            {{ article.title }}
+            <AppSearchHighlight :text="article.title" :terms="highlightTerms" />
           </span>
         </component>
         <p class="m-0 line-clamp-3 max-w-180 text-lg leading-[1.55] text-muted text-pretty transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-          {{ article.description }}
+          <AppSearchHighlight :text="article.description" :terms="highlightTerms" />
+        </p>
+        <p
+          v-if="articleSearchExcerpt(article)"
+          class="m-0 line-clamp-2 max-w-180 border-l border-line pl-(--space-2) text-sm font-bold leading-[1.55] text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
+        >
+          正文匹配：
+          <AppSearchHighlight :text="articleSearchExcerpt(article)" :terms="highlightTerms" />
         </p>
         <ul
           v-if="article.tags.length > 0"
@@ -107,7 +124,7 @@ const tagFilterHref = (tag: string) => ({
               :href="tagFilterHref(tag)"
               :aria-label="`筛选标签：${tag}`"
             >
-              {{ tag }}
+              <AppSearchHighlight :text="tag" :terms="highlightTerms" />
             </NuxtLink>
           </li>
         </ul>

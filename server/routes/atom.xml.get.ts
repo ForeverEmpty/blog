@@ -4,18 +4,21 @@ export default defineEventHandler(async (event) => {
   const updatedAt = articles[0] ? articleUpdatedDate(articles[0]) : new Date().toISOString()
   const entries = articles.map((article) => {
     const url = absoluteSiteUrl(article.path)
+    const image = articleFeedImage(article)
+    const tags = articleFeedTags(article)
 
     return [
       '<entry>',
       `<title>${escapeXml(article.title)}</title>`,
       `<link href="${escapeXml(url)}" />`,
+      image ? `<link rel="enclosure" href="${escapeXml(image.url)}" />` : '',
       `<id>${escapeXml(url)}</id>`,
       `<updated>${escapeXml(articleUpdatedDate(article))}</updated>`,
       `<published>${escapeXml(articleUpdatedDate(article))}</published>`,
       `<summary>${escapeXml(article.description)}</summary>`,
-      `<author><name>${escapeXml(article.author)}</name></author>`,
-      article.category ? `<category term="${escapeXml(article.category)}" />` : '',
-      ...article.tags.map((tag) => `<category term="${escapeXml(tag)}" />`),
+      `<content type="html">${escapeXml(articleSummaryHtml(article))}</content>`,
+      `<author><name>${escapeXml(article.author)}</name><uri>${escapeXml(articleFeedAuthorUrl(article, context.author.url))}</uri></author>`,
+      ...tags.map((tag) => `<category term="${escapeXml(tag)}" />`),
       '</entry>'
     ].filter(Boolean).join('')
   }).join('')

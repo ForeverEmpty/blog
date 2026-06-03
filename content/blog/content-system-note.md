@@ -5,7 +5,7 @@ date: 2026-05-23
 author: Chanko
 authorUrl: /about
 category: "开发记录"
-views: 2
+views: 6
 workflowStatus: published
 published: true
 locked: false
@@ -14,6 +14,7 @@ tags:
   - "Nuxt Content"
   - ChankoBlog
 ---
+
 
 
 
@@ -31,3 +32,5 @@ tags:
 ## 下一步
 
 后续可以把后台管理接到同一套字段上，包括标题、描述、发布时间、标签和发布状态。这样页面设计不需要改变，只需要替换数据来源。
+
+![avatar-mpwhqdr4-97ebca795f.png](/media/avatar-mpwhqdr4-97ebca795f.png)

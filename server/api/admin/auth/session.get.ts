@@ -9,6 +9,8 @@ export default defineEventHandler((event) => {
     authenticated: status.authenticated,
     configured: status.configured,
     username: status.username,
-    csrfToken: status.authenticated ? status.csrfToken : ''
+    csrfToken: status.authenticated ? status.csrfToken : '',
+    expiresAt: status.authenticated ? status.expiresAt : '',
+    secondsRemaining: status.authenticated ? status.secondsRemaining : 0
   }
 })

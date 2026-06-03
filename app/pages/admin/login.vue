@@ -103,7 +103,7 @@ useSiteSeo({
           <NuxtLink class="w-fit text-sm font-bold text-muted underline underline-offset-4 hover:text-ink" href="/">
             返回站点
           </NuxtLink>
-          <h1 class="m-0 font-display text-[112px] font-normal leading-[0.92] text-ink text-pretty max-[720px]:text-[64px]">
+          <h1 class="m-0 font-display text-[72px] font-normal leading-[0.96] text-ink text-pretty max-[720px]:text-[48px]">
             后台登录
           </h1>
           <p class="m-0 max-w-140 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">

@@ -6,7 +6,28 @@
 
 在写任何页面代码前，先用自然语言声明本次采用的设计系统，并等待确认或根据上下文形成明确记录。
 
-必须说明：
+必须先给出以下 `Design Decisions`，不得跳过或只写“沿用项目风格”：
+
+```markdown
+Design Decisions:
+- Color palette: [primary / secondary / neutral / accent]
+- Typography: [heading font / body font / code font]
+- Spacing system: [base unit and multiples]
+- Border-radius strategy: [large / small / sharp]
+- Shadow hierarchy: [elevation 1-5]
+- Motion style: [easing curves / duration / trigger]
+```
+
+填写要求：
+
+- `Color palette` 必须说明主色、辅助色、中性色、强调色各自承担的语义，不能只列色值。
+- `Typography` 必须说明标题字体、正文字体、代码或数字字体，以及它们在内容页和后台界面中的使用边界。
+- `Spacing system` 必须声明基础单位和可用倍数，默认使用 8pt grid；如偏离 8pt，必须说明原因。
+- `Border-radius strategy` 必须说明整体圆角倾向：大圆角、小圆角或锐利边缘，并定义按钮、输入框、卡片、弹窗的层级。
+- `Shadow hierarchy` 必须定义 1-5 级阴影或明确说明哪些层级不使用阴影；后台界面优先用边框和背景层次。
+- `Motion style` 必须说明缓动曲线、持续时间和触发方式；若页面不需要动效，也要声明“仅保留状态过渡”。
+
+扩展说明：
 
 - 配色：品牌色、辅助色、强调色、中性色，以及是否使用 `oklch()` 派生。
 - 字体：标题、正文、代码或数字字体的选择依据。
@@ -16,6 +37,18 @@
 - 图标：使用项目已有图标库；没有图标库时先确认，不用 emoji 代替。
 - 数据策略：真实数据、接口数据、明确空状态或待接入状态，不编造假数据。
 - 实现目标：Nuxt 页面、Vue SFC、后台管理组件、原型页面或其他。
+
+示例记录：
+
+```markdown
+Design Decisions:
+- Color palette: primary 使用品牌主色承载链接、主按钮和当前状态；secondary 用于次级导航和辅助图形；neutral 使用统一灰阶承载背景、文字和边框；accent 只用于警示、选中或关键提示。
+- Typography: heading font 用于页面标题和文章标题；body font 用于正文、表单和列表；code font 只用于代码块、技术标识和等宽数据。
+- Spacing system: 8px 为基础单位，常用 1x/2x/3x/4x/6x/8x/12x，不使用零散间距。
+- Border-radius strategy: small，按钮和输入框 6-8px，卡片不超过 8px，弹窗可略高但保持克制。
+- Shadow hierarchy: elevation 1-2 用于悬浮和弹层，普通卡片不用重阴影，elevation 3-5 只保留给 modal、drawer、popover。
+- Motion style: 160-240ms 状态过渡，使用 ease-out 或 cubic-bezier，触发来源限于 hover、focus、展开收起和进入离开。
+```
 
 设计节奏：
 
@@ -225,4 +258,3 @@
 - 关键交互有 hover、focus、active、disabled、loading、empty、error 等必要状态。
 - 移动端和桌面端没有文字溢出或元素重叠。
 - 后台管理界面保持可扫描、可操作、可维护。
-

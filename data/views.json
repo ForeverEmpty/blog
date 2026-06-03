@@ -1,16 +1,22 @@
 {
   "content-system-note": {
-    "total": 3,
-    "updatedAt": "2026-06-01T09:32:16.432Z",
+    "total": 6,
+    "updatedAt": "2026-06-02T08:31:50.504Z",
     "recentVisitors": {
-      "83a085e9457da19d1c26e5eff3df2478": 1780306921870
+      "4334efd09297e03dbd5daefbd091503a": 1780389110504
+    },
+    "daily": {
+      "2026-06-02": 2
     }
   },
   "markdown-format-stress-test": {
-    "total": 4,
-    "updatedAt": "2026-06-01T09:23:55.270Z",
+    "total": 7,
+    "updatedAt": "2026-06-02T07:34:55.034Z",
     "recentVisitors": {
-      "58d8ba8bc3c9cddeb79fcdee247832bf": 1780305873105
+      "58d8ba8bc3c9cddeb79fcdee247832bf": 1780385695034
+    },
+    "daily": {
+      "2026-06-02": 1
     }
   }
 }

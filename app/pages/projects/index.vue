@@ -18,7 +18,7 @@ type ProjectItem = {
 const appConfig = useAppConfig();
 const route = useRoute();
 const router = useRouter();
-const { searchContentItems } = useArticleSearch();
+const { getSearchHighlightTerms, searchContentItems } = useArticleSearch();
 const { data: projectItems } = await useAsyncData("projects-list", () =>
   $fetch<ProjectItem[]>("/api/projects"),
   {
@@ -59,6 +59,7 @@ const filteredProjects = computed(() => (
 ));
 const projectCount = computed(() => filteredProjects.value.length);
 const isFiltered = computed(() => structuredSearchQuery.value.length > 0);
+const highlightTerms = computed(() => getSearchHighlightTerms(structuredSearchQuery.value));
 const pageSize = computed(() => appConfig.projects.pageSize);
 const requestedPage = computed(() => {
   const page = Number.parseInt(String(route.query.page || "1"), 10);
@@ -252,14 +253,14 @@ useSiteSeo({
                     class="m-0 text-left text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
                     @click="setProjectQueryFilter('status', project.status)"
                   >
-                    {{ project.status }}
+                    <AppSearchHighlight :text="project.status" :terms="highlightTerms" />
                   </button>
                   <button
                     type="button"
                     class="m-0 text-left text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
                     @click="setProjectQueryFilter('category', project.category)"
                   >
-                    {{ project.category }}
+                    <AppSearchHighlight :text="project.category" :terms="highlightTerms" />
                   </button>
                 </div>
 
@@ -270,12 +271,12 @@ useSiteSeo({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {{ project.name }}
+                    <AppSearchHighlight :text="project.name" :terms="highlightTerms" />
                   </a>
                 </h2>
 
                 <p class="m-0 max-w-190 text-lg leading-[1.55] text-muted text-pretty transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
-                  {{ project.description }}
+                  <AppSearchHighlight :text="project.description" :terms="highlightTerms" />
                 </p>
 
                 <ul
@@ -291,7 +292,7 @@ useSiteSeo({
                       class="border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-muted transition-colors duration-200 hover:bg-paper hover:text-ink group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
                       @click="setProjectQueryFilter('tag', tag)"
                     >
-                      {{ tag }}
+                      <AppSearchHighlight :text="tag" :terms="highlightTerms" />
                     </button>
                   </li>
                 </ul>

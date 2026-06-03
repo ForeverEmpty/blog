@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
     { loc: absoluteSiteUrl('/archive'), lastmod: now, changefreq: 'weekly', priority: '0.7' },
     { loc: absoluteSiteUrl('/projects'), lastmod: now, changefreq: 'weekly', priority: '0.7' },
     { loc: absoluteSiteUrl('/friends'), lastmod: now, changefreq: 'weekly', priority: '0.5' },
+    { loc: absoluteSiteUrl('/subscribe'), lastmod: now, changefreq: 'weekly', priority: '0.5' },
     { loc: absoluteSiteUrl('/about'), lastmod: now, changefreq: 'monthly', priority: '0.6' },
     ...publishedArticles.map((article) => ({
       loc: absoluteSiteUrl(article.path),

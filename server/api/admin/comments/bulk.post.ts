@@ -27,18 +27,35 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const existingComments = await readWalineComments()
+  const selectedComments = existingComments.filter((comment) => ids.includes(comment.id))
+
   if (action === 'delete') {
     const deletedCount = await deleteWalineComments(ids)
+    const audit = createAdminAuditTrail(
+      {
+        count: selectedComments.length,
+        statuses: selectedComments.map((comment) => comment.status)
+      },
+      {
+        count: 0,
+        statuses: []
+      },
+      [
+        { key: 'count', label: '评论数量' },
+        { key: 'statuses', label: '原状态' }
+      ]
+    )
 
     await writeAdminLog({
       action: 'comment.bulk.delete',
       targetType: 'comment',
       targetId: ids.join(','),
-      message: `批量删除评论：${deletedCount} 条`,
-      payload: {
+      message: appendAuditSummary(`批量删除评论：${deletedCount} 条`, audit),
+      payload: withAuditPayload({
         ids,
         deletedCount
-      }
+      }, audit)
     }).catch(() => {})
 
     return {
@@ -56,17 +73,31 @@ export default defineEventHandler(async (event) => {
 
   const comments = (await updateWalineCommentStatuses(ids, body.status as WalineCommentStatus))
     .map((comment) => withCommentModeration(comment, rules))
+  const audit = createAdminAuditTrail(
+    {
+      status: selectedComments.map((comment) => comment.status),
+      count: selectedComments.length
+    },
+    {
+      status: body.status,
+      count: comments.length
+    },
+    [
+      { key: 'status', label: '评论状态' },
+      { key: 'count', label: '评论数量' }
+    ]
+  )
 
   await writeAdminLog({
     action: 'comment.bulk.status',
     targetType: 'comment',
     targetId: ids.join(','),
-    message: `批量更新评论状态：${comments.length} 条 / ${body.status}`,
-    payload: {
+    message: appendAuditSummary(`批量更新评论状态：${comments.length} 条 / ${body.status}`, audit),
+    payload: withAuditPayload({
       ids,
       status: body.status,
       updatedCount: comments.length
-    }
+    }, audit)
   }).catch(() => {})
 
   return {

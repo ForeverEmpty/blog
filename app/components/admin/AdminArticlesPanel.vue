@@ -36,6 +36,7 @@ const emit = defineEmits<{
   selectArticleAutosave: [autosave: ManagedArticleAutosave]
   deleteArticleAutosave: [autosave: ManagedArticleAutosave]
   saveDraft: []
+  exportBackup: []
 }>()
 
 const articleSearchQuery = defineModel<string>('articleSearchQuery', { required: true })
@@ -643,10 +644,16 @@ onBeforeUnmount(() => {
           </label>
         </div>
 
-        <AppButton size="sm" variant="solid" @click="emit('createArticle')">
-          <Icon name="lucide:plus" mode="svg" class="h-4 w-4" aria-hidden="true" />
-          新增
-        </AppButton>
+        <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton size="sm" variant="outline" :disabled="props.saving" @click="emit('exportBackup')">
+            <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            备份
+          </AppButton>
+          <AppButton size="sm" variant="solid" @click="emit('createArticle')">
+            <Icon name="lucide:plus" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            新增
+          </AppButton>
+        </div>
       </div>
 
       <div class="grid grid-cols-5 border-b border-line max-[980px]:grid-cols-2 max-[560px]:grid-cols-1" aria-label="文章工作流状态">

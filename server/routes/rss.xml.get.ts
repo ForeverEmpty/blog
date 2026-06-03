@@ -4,6 +4,8 @@ export default defineEventHandler(async (event) => {
   const updatedAt = articles[0] ? articleUpdatedDate(articles[0]) : new Date().toISOString()
   const items = articles.map((article) => {
     const url = absoluteSiteUrl(article.path)
+    const image = articleFeedImage(article)
+    const tags = articleFeedTags(article)
 
     return [
       '<item>',
@@ -11,10 +13,11 @@ export default defineEventHandler(async (event) => {
       `<link>${escapeXml(url)}</link>`,
       `<guid isPermaLink="true">${escapeXml(url)}</guid>`,
       `<description>${escapeXml(article.description)}</description>`,
+      `<content:encoded>${escapeXml(articleSummaryHtml(article))}</content:encoded>`,
       `<pubDate>${new Date(articleUpdatedDate(article)).toUTCString()}</pubDate>`,
       `<author>${escapeXml(article.author)}</author>`,
-      article.category ? `<category>${escapeXml(article.category)}</category>` : '',
-      ...article.tags.map((tag) => `<category>${escapeXml(tag)}</category>`),
+      image ? `<media:thumbnail url="${escapeXml(image.url)}" />` : '',
+      ...tags.map((tag) => `<category>${escapeXml(tag)}</category>`),
       '</item>'
     ].filter(Boolean).join('')
   }).join('')
@@ -23,7 +26,7 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'cache-control', 'max-age=900, stale-while-revalidate=3600')
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${escapeXml(context.siteName)}</title>
     <link>${escapeXml(context.siteUrl)}</link>

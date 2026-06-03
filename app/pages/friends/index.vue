@@ -419,14 +419,14 @@ useSiteSeo({
       <Transition name="dialog">
         <div
           v-if="applyOpen"
-          class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3) backdrop-blur-[1px] max-[520px]:p-(--space-2)"
+          class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3) max-[520px]:p-(--space-2)"
           role="dialog"
           aria-modal="true"
           aria-labelledby="friend-apply-title"
           @click.self="closeApplyDialog"
         >
           <form
-            class="dialog-panel grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-hidden border border-line bg-paper text-ink shadow-[12px_12px_0_var(--line)]"
+            class="dialog-panel grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-hidden border border-line bg-paper text-ink"
             :class="applySubmitted ? 'max-w-150' : ''"
             @submit.prevent="submitFriendApplication"
           >
@@ -438,7 +438,7 @@ useSiteSeo({
                   </p>
                   <h2
                     id="friend-apply-title"
-                    class="m-0 font-display text-[56px] font-normal leading-none max-[520px]:text-[40px]"
+                    class="m-0 font-display text-[40px] font-normal leading-none max-[520px]:text-[32px]"
                   >
                     申请友链
                   </h2>

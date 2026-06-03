@@ -13,11 +13,13 @@ const emit = defineEmits<{
   deleteMedia: [asset: ManagedMediaAsset]
   deleteSelectedMedia: [assets: ManagedMediaAsset[]]
   refreshMedia: []
+  exportBackup: []
 }>()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const mediaSearchQuery = ref('')
 const mediaTypeFilter = ref<'all' | ManagedMediaAsset['type']>('all')
+const mediaUsageFilter = ref<'all' | 'used' | 'unused'>('all')
 const mediaSortMode = ref<'updatedDesc' | 'updatedAsc' | 'nameAsc' | 'sizeDesc' | 'sizeAsc'>('updatedDesc')
 const copiedValue = ref('')
 const previewAsset = ref<ManagedMediaAsset | null>(null)
@@ -49,6 +51,8 @@ const typeCounts = computed(() => {
 })
 
 const totalSize = computed(() => props.mediaAssets.reduce((sum, asset) => sum + asset.size, 0))
+const usedAssetCount = computed(() => props.mediaAssets.filter((asset) => asset.usageCount > 0).length)
+const unusedAssetCount = computed(() => Math.max(0, props.mediaAssets.length - usedAssetCount.value))
 
 const filteredAssets = computed(() => {
   const query = mediaSearchQuery.value.trim().toLowerCase()
@@ -56,10 +60,21 @@ const filteredAssets = computed(() => {
   return props.mediaAssets.filter((asset) => (
     (mediaTypeFilter.value === 'all' || asset.type === mediaTypeFilter.value) &&
     (
+      mediaUsageFilter.value === 'all' ||
+      (mediaUsageFilter.value === 'used' && asset.usageCount > 0) ||
+      (mediaUsageFilter.value === 'unused' && asset.usageCount === 0)
+    ) &&
+    (
       !query ||
       asset.name.toLowerCase().includes(query) ||
       asset.mime.toLowerCase().includes(query) ||
-      asset.url.toLowerCase().includes(query)
+      asset.url.toLowerCase().includes(query) ||
+      asset.usedBy.some((source) => (
+        source.title.toLowerCase().includes(query) ||
+        source.location.toLowerCase().includes(query) ||
+        source.field.toLowerCase().includes(query) ||
+        source.snippet.toLowerCase().includes(query)
+      ))
     )
   ))
 })
@@ -127,6 +142,19 @@ const formatTime = (value: string) => {
 const getTypeLabel = (type: ManagedMediaAsset['type']) => (
   mediaTypeOptions.find((option) => option.value === type)?.label || type
 )
+
+const getUsageTypeLabel = (type: ManagedMediaAsset['usedBy'][number]['type']) => {
+  const labels: Record<ManagedMediaAsset['usedBy'][number]['type'], string> = {
+    article: '文章',
+    about: '关于',
+    project: '项目',
+    friend: '友链',
+    notification: '前台通知',
+    adminNotification: '后台通知'
+  }
+
+  return labels[type]
+}
 
 const openFilePicker = () => {
   fileInput.value?.click()
@@ -248,7 +276,7 @@ watch(
           <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
             Media Library
           </p>
-          <h2 class="m-0 font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+          <h2 class="m-0 font-display text-[40px] font-normal leading-none max-[520px]:text-[32px]">
             媒体管理
           </h2>
         </div>
@@ -265,6 +293,10 @@ watch(
             <Icon name="lucide:refresh-cw" mode="svg" class="h-4 w-4" aria-hidden="true" />
             刷新
           </AppButton>
+          <AppButton variant="outline" :disabled="props.saving || props.uploading" @click="emit('exportBackup')">
+            <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            备份
+          </AppButton>
           <AppButton variant="solid" :loading="props.uploading" @click="openFilePicker">
             <Icon name="lucide:upload" mode="svg" class="h-4 w-4" aria-hidden="true" />
             上传媒体
@@ -272,7 +304,7 @@ watch(
         </div>
       </div>
 
-      <div class="grid grid-cols-[repeat(5,minmax(0,1fr))] border-y border-line max-[1100px]:grid-cols-3 max-[720px]:grid-cols-2 max-[520px]:grid-cols-1">
+      <div class="grid grid-cols-[repeat(6,minmax(0,1fr))] border-y border-line max-[1280px]:grid-cols-3 max-[720px]:grid-cols-2 max-[520px]:grid-cols-1">
         <div
           v-for="option in mediaTypeOptions.slice(1)"
           :key="option.value"
@@ -293,6 +325,15 @@ watch(
           </span>
           <span class="truncate font-display text-[34px] leading-none text-ink max-[1200px]:text-[30px]">
             {{ formatSize(totalSize) }}
+          </span>
+        </div>
+        <div class="grid min-w-0 gap-1 border-l border-line p-(--space-2) max-[1280px]:border-l-0 max-[1280px]:border-t">
+          <span class="flex min-w-0 items-center gap-2 text-[13px] font-bold uppercase tracking-normal text-muted">
+            <Icon name="lucide:git-branch" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            <span class="truncate">已引用</span>
+          </span>
+          <span class="truncate font-display text-[34px] leading-none text-ink max-[1200px]:text-[30px]">
+            {{ usedAssetCount }}
           </span>
         </div>
       </div>
@@ -318,7 +359,7 @@ watch(
         </span>
       </button>
 
-      <div class="grid grid-cols-[minmax(220px,1fr)_minmax(150px,auto)_minmax(170px,auto)] gap-(--space-2) max-[860px]:grid-cols-1">
+      <div class="grid grid-cols-[minmax(220px,1fr)_minmax(150px,auto)_minmax(150px,auto)_minmax(170px,auto)] gap-(--space-2) max-[980px]:grid-cols-2 max-[640px]:grid-cols-1">
         <label class="grid gap-2 text-sm font-bold text-muted">
           搜索媒体
           <input
@@ -333,6 +374,14 @@ watch(
             <option v-for="option in mediaTypeOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
+          </select>
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-muted">
+          使用状态
+          <select v-model="mediaUsageFilter" class="min-h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+            <option value="all">全部</option>
+            <option value="used">已引用 {{ usedAssetCount }}</option>
+            <option value="unused">未引用 {{ unusedAssetCount }}</option>
           </select>
         </label>
         <label class="grid gap-2 text-sm font-bold text-muted">
@@ -434,15 +483,41 @@ watch(
           </button>
 
           <div class="grid gap-1">
-            <h3 class="m-0 break-all text-sm font-bold text-ink">
-              {{ asset.name }}
-            </h3>
+            <div class="flex flex-wrap items-start justify-between gap-1">
+              <h3 class="m-0 break-all text-sm font-bold text-ink">
+                {{ asset.name }}
+              </h3>
+              <span
+                class="shrink-0 border border-line px-1.5 py-0.5 text-[12px] font-bold text-muted"
+                :class="asset.usageCount > 0 ? 'bg-paper' : 'bg-code-surface'"
+              >
+                {{ asset.usageCount > 0 ? `引用 ${asset.usageCount}` : '未引用' }}
+              </span>
+            </div>
             <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
               {{ formatSize(asset.size) }} / {{ formatTime(asset.updatedAt) }}
             </p>
             <p class="m-0 break-all font-mono text-[12px] leading-[1.5] text-muted">
               {{ asset.url }}
             </p>
+            <div v-if="asset.usedBy.length" class="grid gap-1 border border-line bg-code-surface p-(--space-1)">
+              <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
+                使用位置
+              </p>
+              <ul class="m-0 grid list-none gap-1 p-0">
+                <li
+                  v-for="source in asset.usedBy.slice(0, 3)"
+                  :key="`${source.type}-${source.location}-${source.field}`"
+                  class="grid gap-0.5 text-[12px] leading-[1.45] text-muted"
+                >
+                  <span class="font-bold text-ink">{{ getUsageTypeLabel(source.type) }} / {{ source.title }}</span>
+                  <span class="truncate">{{ source.location }} · {{ source.field }}</span>
+                </li>
+              </ul>
+              <p v-if="asset.usedBy.length > 3" class="m-0 text-[12px] font-bold text-muted">
+                另有 {{ asset.usedBy.length - 3 }} 处引用
+              </p>
+            </div>
           </div>
         </div>
 
@@ -473,7 +548,7 @@ watch(
       <Transition name="dialog">
         <div
           v-if="previewAsset"
-          class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3) backdrop-blur-[1px]"
+          class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3)"
           role="dialog"
           aria-modal="true"
           :aria-label="`预览 ${previewAsset.name}`"
@@ -481,7 +556,7 @@ watch(
           @click.self="closePreview"
           @keydown.esc="closePreview"
         >
-          <section class="dialog-panel grid w-full max-w-[min(1120px,94vw)] gap-(--space-2) border border-line bg-paper text-ink shadow-[12px_12px_0_var(--line)]">
+          <section class="dialog-panel grid w-full max-w-[min(1120px,94vw)] gap-(--space-2) border border-line bg-paper text-ink">
             <header class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-(--space-2) border-b border-line p-(--space-2)">
               <div class="flex gap-1">
                 <button
@@ -507,9 +582,9 @@ watch(
                 <h3 class="m-0 break-all text-base font-bold">
                   {{ previewAsset.name }}
                 </h3>
-                <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
-                  {{ getTypeLabel(previewAsset.type) }} / {{ formatSize(previewAsset.size) }} / {{ previewAsset.mime }} / {{ formatTime(previewAsset.updatedAt) }}
-                </p>
+              <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
+                {{ getTypeLabel(previewAsset.type) }} / {{ formatSize(previewAsset.size) }} / {{ previewAsset.mime }} / {{ formatTime(previewAsset.updatedAt) }}
+              </p>
               </div>
               <button
                 type="button"
@@ -551,6 +626,41 @@ watch(
               <p class="m-0 break-all font-mono text-[12px] leading-[1.5] text-muted">
                 {{ previewAsset.url }}
               </p>
+              <section class="grid gap-(--space-1) border border-line bg-code-surface p-(--space-2)" aria-label="媒体使用关系">
+                <div class="flex flex-wrap items-center justify-between gap-(--space-1)">
+                  <p class="m-0 text-sm font-bold text-ink">
+                    使用关系
+                  </p>
+                  <span class="text-[12px] font-bold uppercase tracking-normal text-muted">
+                    {{ previewAsset.usageCount > 0 ? `${previewAsset.usageCount} 处引用` : '未引用' }}
+                  </span>
+                </div>
+                <ul v-if="previewAsset.usedBy.length" class="m-0 grid max-h-42 list-none gap-1 overflow-auto p-0">
+                  <li
+                    v-for="source in previewAsset.usedBy"
+                    :key="`${source.type}-${source.location}-${source.field}`"
+                    class="grid gap-1 border border-line bg-paper p-(--space-1) text-[13px] leading-[1.5]"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-1">
+                      <p class="m-0 font-bold text-ink">
+                        {{ getUsageTypeLabel(source.type) }} / {{ source.title }}
+                      </p>
+                      <AppLinkButton v-if="source.href" :href="source.href" variant="text">
+                        打开
+                      </AppLinkButton>
+                    </div>
+                    <p class="m-0 text-muted">
+                      {{ source.location }} · {{ source.field }}
+                    </p>
+                    <p class="m-0 break-all font-mono text-[12px] text-muted">
+                      {{ source.snippet }}
+                    </p>
+                  </li>
+                </ul>
+                <p v-else class="m-0 text-[13px] leading-[1.6] text-muted">
+                  当前没有在文章、关于页、项目、友链或通知中发现对该媒体的引用。
+                </p>
+              </section>
               <div class="flex flex-wrap items-center justify-between gap-(--space-2)">
                 <button
                   type="button"

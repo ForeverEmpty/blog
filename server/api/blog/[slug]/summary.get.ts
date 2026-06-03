@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import type { H3Event } from "h3";
 
 type AiSummaryConfig = {
   enabled?: boolean;
@@ -165,6 +166,22 @@ const generateSummary = async ({
   return parseSummaryJson(content);
 };
 
+const writeAiSummaryFailureLog = async (event: H3Event, slug: string, message: string, error?: unknown) => {
+  await createAdminNotificationEvent(event, {
+    source: "ai.summary.error",
+    title: `AI 摘要失败：${slug || "unknown"}`,
+    body: message,
+    level: "danger",
+    href: "admin:logs",
+    hrefLabel: "查看日志",
+    targetId: slug || "unknown",
+    payload: {
+      slug,
+      error: error instanceof Error ? error.message : String(error || ""),
+    },
+  }).catch(() => {});
+};
+
 export default defineEventHandler(async (event) => {
   const appConfig = useAppConfig(event);
   const aiSummary = (appConfig.aiSummary || {}) as AiSummaryConfig;
@@ -206,6 +223,8 @@ export default defineEventHandler(async (event) => {
   const apiKey = runtimeConfig.aiSummaryApiKey;
 
   if (!apiKey) {
+    await writeAiSummaryFailureLog(event, slug, "AI 摘要失败：未配置 API Key");
+
     throw createError({
       statusCode: 500,
       statusMessage: "AI summary API key is not configured",
@@ -218,19 +237,27 @@ export default defineEventHandler(async (event) => {
   const model = aiSummary.model || "gpt-4o-mini";
   const temperature = typeof aiSummary.temperature === "number" ? aiSummary.temperature : 0.2;
   const maxTokens = typeof aiSummary.maxTokens === "number" ? aiSummary.maxTokens : 700;
-  const generated = await generateSummary({
-    markdown,
-    title,
-    description,
-    sections,
-    config: {
-      endpoint,
-      model,
-      temperature,
-      maxTokens,
-    },
-    apiKey,
-  });
+  let generated: Omit<ArticleSummary, "contentHash" | "generatedAt">;
+
+  try {
+    generated = await generateSummary({
+      markdown,
+      title,
+      description,
+      sections,
+      config: {
+        endpoint,
+        model,
+        temperature,
+        maxTokens,
+      },
+      apiKey,
+    });
+  } catch (error) {
+    await writeAiSummaryFailureLog(event, slug, "AI 摘要失败：接口返回异常或内容无法解析", error);
+    throw error;
+  }
+
   const summary: ArticleSummary = {
     ...generated,
     contentHash,

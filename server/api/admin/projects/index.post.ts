@@ -59,20 +59,34 @@ export default defineEventHandler(async (event) => {
   }
 
   const nextProjects = [project, ...projects.filter((item) => item.id !== project.id)]
+  const audit = createAdminAuditTrail(existing, project, [
+    { key: 'name', label: '名称' },
+    { key: 'description', label: '描述' },
+    { key: 'status', label: '状态' },
+    { key: 'category', label: '分类' },
+    { key: 'sourceUrl', label: '源码地址' },
+    { key: 'launchUrl', label: '部署地址' },
+    { key: 'tags', label: '标签' },
+    { key: 'featured', label: '首页展示' },
+    { key: 'hidden', label: '隐藏' },
+    { key: 'order', label: '排序' },
+    { key: 'coverUrl', label: '封面' },
+    { key: 'checkStatus', label: '巡检状态' }
+  ])
 
   await writeProjects(nextProjects)
   await writeAdminLog({
     action: existing ? 'project.update' : 'project.create',
     targetType: 'project',
     targetId: project.id,
-    message: `保存项目：${project.name}`,
-    payload: {
+    message: appendAuditSummary(`保存项目：${project.name}`, audit),
+    payload: withAuditPayload({
       name: project.name,
       status: project.status,
       featured: project.featured,
       hidden: project.hidden,
       order: project.order
-    }
+    }, audit)
   }).catch(() => {})
 
   return project

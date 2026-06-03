@@ -14,20 +14,26 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const existing = (await readWalineComments()).find((item) => item.id === id)
   const comment = withCommentModeration(
     await updateWalineCommentStatus(id, body.status as WalineCommentStatus),
     rules
   )
+  const audit = createAdminAuditTrail(existing, comment, [
+    { key: 'status', label: '评论状态' },
+    { key: 'author', label: '昵称' },
+    { key: 'articleSlug', label: '文章' }
+  ])
 
   await writeAdminLog({
     action: 'comment.update',
     targetType: 'comment',
     targetId: id,
-    message: `更新评论状态：${comment.author} / ${comment.status}`,
-    payload: {
+    message: appendAuditSummary(`更新评论状态：${comment.author} / ${comment.status}`, audit),
+    payload: withAuditPayload({
       articleSlug: comment.articleSlug,
       status: comment.status
-    }
+    }, audit)
   }).catch(() => {})
 
   return comment

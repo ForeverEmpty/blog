@@ -97,17 +97,17 @@ const {
       </div>
 
       <div
-        class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-(--space-4) border-t border-line pt-(--space-3) max-[760px]:grid-cols-1"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-(--space-4) border-t border-line pt-(--space-3) max-[760px]:grid-cols-1 max-[760px]:gap-(--space-3)"
       >
         <nav
-          class="flex flex-wrap gap-(--space-2) text-sm text-muted"
+          class="flex flex-wrap gap-(--space-2) text-sm text-muted max-[760px]:grid max-[760px]:grid-cols-3 max-[760px]:gap-1 max-[380px]:grid-cols-2"
           aria-label="页脚导航"
         >
           <AppLinkButton
             v-for="link in appConfig.footer.links"
             :key="link.label"
             variant="text"
-            class="font-normal"
+            class="font-normal max-[760px]:min-h-10 max-[760px]:w-full max-[760px]:px-1 max-[760px]:text-[14px]"
             :href="link.href"
             :active="isActiveNavigation(link.href)"
           >
@@ -115,19 +115,19 @@ const {
           </AppLinkButton>
         </nav>
 
-        <div class="grid justify-items-end gap-2 max-[760px]:justify-items-start">
-          <nav class="flex flex-wrap justify-end gap-(--space-1) text-sm text-muted max-[760px]:justify-start" aria-label="订阅">
+        <div class="grid justify-items-end gap-2 max-[760px]:justify-items-stretch">
+          <nav class="flex flex-wrap justify-end gap-(--space-1) text-sm text-muted max-[760px]:grid max-[760px]:grid-cols-3 max-[760px]:justify-stretch max-[760px]:gap-1" aria-label="订阅">
             <AppLinkButton
               v-for="feed in appConfig.footer.feeds"
               :key="feed.href"
               variant="text"
-              class="font-normal"
+              class="font-normal max-[760px]:min-h-10 max-[760px]:w-full max-[760px]:px-1 max-[760px]:text-[14px]"
               :href="feed.href"
             >
               {{ feed.label }}
             </AppLinkButton>
           </nav>
-          <p class="m-0 text-sm text-quiet">
+          <p class="m-0 text-sm text-quiet max-[760px]:text-center">
             © {{ currentYear }} {{ appConfig.site.name }}
           </p>
         </div>

@@ -92,6 +92,8 @@ export const getAdminAuthStatus = (event: H3Event) => {
       configured,
       username,
       csrfToken: '',
+      expiresAt: '',
+      secondsRemaining: 0,
       invalidReason: configured ? 'missing' : 'unconfigured'
     }
   }
@@ -110,12 +112,15 @@ export const getAdminAuthStatus = (event: H3Event) => {
       configured,
       username,
       csrfToken: '',
+      expiresAt: '',
+      secondsRemaining: 0,
       invalidReason
     }
   }
 
   try {
     const session = JSON.parse(decodeBase64Url(payload)) as AdminSessionPayload
+    const now = Math.floor(Date.now() / 1000)
 
     if (session.username !== username) {
       return {
@@ -123,16 +128,20 @@ export const getAdminAuthStatus = (event: H3Event) => {
         configured,
         username,
         csrfToken: '',
+        expiresAt: '',
+        secondsRemaining: 0,
         invalidReason: 'username'
       }
     }
 
-    if (session.exp < Math.floor(Date.now() / 1000)) {
+    if (session.exp < now) {
       return {
         authenticated: false,
         configured,
         username,
         csrfToken: '',
+        expiresAt: '',
+        secondsRemaining: 0,
         invalidReason: 'expired'
       }
     }
@@ -143,6 +152,8 @@ export const getAdminAuthStatus = (event: H3Event) => {
         configured,
         username,
         csrfToken: '',
+        expiresAt: '',
+        secondsRemaining: 0,
         invalidReason: 'malformed'
       }
     }
@@ -151,7 +162,9 @@ export const getAdminAuthStatus = (event: H3Event) => {
       authenticated: true,
       configured,
       username,
-      csrfToken: session.csrf
+      csrfToken: session.csrf,
+      expiresAt: new Date(session.exp * 1000).toISOString(),
+      secondsRemaining: Math.max(0, session.exp - now)
     }
   } catch {
     return {
@@ -159,6 +172,8 @@ export const getAdminAuthStatus = (event: H3Event) => {
       configured,
       username,
       csrfToken: '',
+      expiresAt: '',
+      secondsRemaining: 0,
       invalidReason: 'malformed'
     }
   }

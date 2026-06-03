@@ -11,6 +11,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const beforeProject = {
+    ...target,
+    tags: [...target.tags]
+  }
   const nextSourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim() : target.sourceUrl
   const nextLaunchUrl = typeof body.launchUrl === 'string' ? body.launchUrl.trim() : target.launchUrl
   const normalizedSourceUrl = nextSourceUrl || nextLaunchUrl
@@ -41,20 +45,34 @@ export default defineEventHandler(async (event) => {
     sourceStatus: shouldResetInspection ? undefined : target.sourceStatus,
     sourceTimeMs: shouldResetInspection ? undefined : target.sourceTimeMs
   })
+  const audit = createAdminAuditTrail(beforeProject, target, [
+    { key: 'name', label: '名称' },
+    { key: 'description', label: '描述' },
+    { key: 'status', label: '状态' },
+    { key: 'category', label: '分类' },
+    { key: 'sourceUrl', label: '源码地址' },
+    { key: 'launchUrl', label: '部署地址' },
+    { key: 'tags', label: '标签' },
+    { key: 'featured', label: '首页展示' },
+    { key: 'hidden', label: '隐藏' },
+    { key: 'order', label: '排序' },
+    { key: 'coverUrl', label: '封面' },
+    { key: 'checkStatus', label: '巡检状态' }
+  ])
 
   await writeProjects(projects)
   await writeAdminLog({
     action: 'project.update',
     targetType: 'project',
     targetId: target.id,
-    message: `更新项目：${target.name}`,
-    payload: {
+    message: appendAuditSummary(`更新项目：${target.name}`, audit),
+    payload: withAuditPayload({
       name: target.name,
       status: target.status,
       featured: target.featured,
       hidden: target.hidden,
       order: target.order
-    }
+    }, audit)
   }).catch(() => {})
 
   return target

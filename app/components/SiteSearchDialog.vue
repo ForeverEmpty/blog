@@ -9,6 +9,9 @@ type SiteSearchArticle = {
   pinned?: boolean
   tags: string[]
   author?: string
+  markdown?: string
+  contentText?: string
+  body?: unknown
 }
 
 type SiteSearchProject = {
@@ -37,6 +40,9 @@ type SiteSearchResult = {
   launchUrl?: string
   sourceUrl?: string
   author?: string
+  markdown?: string
+  contentText?: string
+  body?: unknown
 }
 
 const props = defineProps<{
@@ -52,7 +58,7 @@ const emit = defineEmits<{
 const query = ref('')
 const activeIndex = ref(0)
 const searchInput = ref<HTMLInputElement | null>(null)
-const { getSearchHighlightTerms, searchContentItems } = useArticleSearch()
+const { getSearchHighlightTerms, getSearchMatchExcerpt, searchContentItems } = useArticleSearch()
 
 const searchItems = computed<SiteSearchResult[]>(() => [
   ...props.articles.map((article) => ({
@@ -87,6 +93,11 @@ const resultTitle = (item: SiteSearchResult) => item.title || item.name || '未�
 const resultHref = (item: SiteSearchResult) => item.type === 'project'
   ? item.launchUrl || item.sourceUrl || '/projects'
   : item.path || '/blog'
+const resultSearchExcerpt = (item: SiteSearchResult) => (
+  item.type === 'article' && query.value.trim()
+    ? getSearchMatchExcerpt(item, query.value)
+    : ''
+)
 
 const makeFilterExpression = (key: string, value: string) => `${key}="${value.replaceAll('"', '\\"')}"`
 
@@ -96,50 +107,6 @@ const toggleFilterExpression = (expression: string) => {
   query.value = current.includes(expression)
     ? current.replace(expression, '').replace(/\s+/g, ' ').trim()
     : [current, expression].filter(Boolean).join(' ')
-}
-
-const getHighlightedSegments = (value: string | undefined) => {
-  const text = value || ''
-  const terms = highlightTerms.value
-    .map((term) => term.trim())
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
-
-  if (terms.length === 0 || !text) {
-    return [{ text, matched: false }]
-  }
-
-  const lowerText = text.toLocaleLowerCase()
-  const segments: { text: string, matched: boolean }[] = []
-  let cursor = 0
-
-  while (cursor < text.length) {
-    let nextIndex = -1
-    let nextTerm = ''
-
-    for (const term of terms) {
-      const index = lowerText.indexOf(term.toLocaleLowerCase(), cursor)
-
-      if (index >= 0 && (nextIndex < 0 || index < nextIndex)) {
-        nextIndex = index
-        nextTerm = term
-      }
-    }
-
-    if (nextIndex < 0) {
-      segments.push({ text: text.slice(cursor), matched: false })
-      break
-    }
-
-    if (nextIndex > cursor) {
-      segments.push({ text: text.slice(cursor, nextIndex), matched: false })
-    }
-
-    segments.push({ text: text.slice(nextIndex, nextIndex + nextTerm.length), matched: true })
-    cursor = nextIndex + nextTerm.length
-  }
-
-  return segments
 }
 
 const openResult = (item: SiteSearchResult | undefined) => {
@@ -207,7 +174,7 @@ watch(
     <Transition name="dialog">
       <div
         v-if="open"
-        class="fixed inset-0 z-50 grid place-items-start bg-ink/55 p-(--space-3) backdrop-blur-[1px] max-[640px]:p-(--space-2)"
+        class="fixed inset-0 z-50 grid place-items-start bg-ink/55 p-(--space-3) max-[640px]:p-(--space-2)"
         role="dialog"
         aria-modal="true"
         aria-labelledby="site-search-title"
@@ -220,14 +187,14 @@ watch(
           @click="closeSearch"
         />
 
-        <section class="dialog-panel relative z-1 mx-auto mt-[8vh] grid w-full max-w-250 content-start border border-line bg-paper text-ink shadow-[12px_12px_0_var(--line)]">
+        <section class="dialog-panel relative z-1 mx-auto mt-[8vh] grid w-full max-w-250 content-start border border-line bg-paper text-ink">
           <header class="grid gap-(--space-2) border-b border-line p-(--space-3)">
             <div class="flex items-center justify-between gap-(--space-2)">
               <div class="grid gap-1">
                 <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
                   Search
                 </p>
-                <h2 id="site-search-title" class="m-0 font-display text-[56px] font-normal leading-none max-[640px]:text-[40px]">
+                <h2 id="site-search-title" class="m-0 font-display text-[40px] font-normal leading-none max-[640px]:text-[32px]">
                   搜索文章和项目
                 </h2>
               </div>
@@ -303,28 +270,35 @@ watch(
 
               <div class="grid min-w-0 gap-1">
                 <a
-                  class="truncate font-display text-[42px] leading-none focus-visible:outline-none max-[640px]:text-[32px]"
+                  class="truncate font-display text-[28px] leading-none focus-visible:outline-none max-[640px]:text-[24px]"
                   :href="resultHref(item)"
                   :target="item.type === 'project' ? '_blank' : undefined"
                   :rel="item.type === 'project' ? 'noreferrer' : undefined"
                   @click.stop="closeSearch"
                 >
-                  <span
-                    v-for="(segment, segmentIndex) in getHighlightedSegments(resultTitle(item))"
-                    :key="`title-${segmentIndex}-${segment.text}`"
-                    :class="segment.matched ? 'bg-callout-warning-surface px-0.5 text-ink group-hover:bg-paper' : ''"
-                  >{{ segment.text }}</span>
+                  <AppSearchHighlight :text="resultTitle(item)" :terms="highlightTerms" />
                 </a>
                 <p class="m-0 line-clamp-2 text-base leading-[1.55] text-muted transition-colors duration-200 group-hover:text-paper" :class="activeIndex === index ? 'text-paper' : ''">
-                  <span
-                    v-for="(segment, segmentIndex) in getHighlightedSegments(item.description)"
-                    :key="`description-${segmentIndex}-${segment.text}`"
-                    :class="segment.matched ? 'bg-callout-warning-surface px-0.5 text-ink group-hover:bg-paper' : ''"
-                  >{{ segment.text }}</span>
+                  <AppSearchHighlight :text="item.description" :terms="highlightTerms" />
+                </p>
+                <p
+                  v-if="resultSearchExcerpt(item)"
+                  class="m-0 line-clamp-2 border-l border-line pl-(--space-2) text-sm font-bold leading-[1.55] text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper"
+                  :class="activeIndex === index ? 'border-paper text-paper' : ''"
+                >
+                  正文匹配：
+                  <AppSearchHighlight :text="resultSearchExcerpt(item)" :terms="highlightTerms" />
                 </p>
                 <div class="flex flex-wrap gap-(--space-1)">
                   <span class="text-[12px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper" :class="activeIndex === index ? 'text-paper' : ''">
-                    {{ item.status || item.date || item.category || 'Index' }}
+                    <AppSearchHighlight :text="item.status || item.date || item.category || 'Index'" :terms="highlightTerms" />
+                  </span>
+                  <span
+                    v-if="item.category"
+                    class="border border-line px-1 text-[12px] font-bold text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper"
+                    :class="activeIndex === index ? 'border-paper text-paper' : ''"
+                  >
+                    <AppSearchHighlight :text="item.category" :terms="highlightTerms" />
                   </span>
                   <span
                     v-if="item.pinned"
@@ -348,7 +322,7 @@ watch(
                     class="border border-line px-1 text-[12px] font-bold text-muted transition-colors duration-200 group-hover:border-paper group-hover:text-paper"
                     :class="activeIndex === index ? 'border-paper text-paper' : ''"
                   >
-                    {{ tag }}
+                    <AppSearchHighlight :text="tag" :terms="highlightTerms" />
                   </span>
                 </div>
               </div>

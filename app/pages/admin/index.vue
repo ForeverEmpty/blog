@@ -3,8 +3,12 @@ import type {
   AdminPanel,
   AdminPanelItem,
   AdminBackupPayload,
+  AdminBackupRestorePreview,
   AdminBackupRestoreResult,
+  AdminBackupScope,
   AdminStat,
+  AdminSessionStatus,
+  AdminVisitStats,
   ArticlePublishCheck,
   ArticleWorkflowStatus,
   ManagedAdminLog,
@@ -12,11 +16,16 @@ import type {
   ManagedArticle,
   ManagedArticleAutosave,
   ManagedArticleVersion,
+  ManagedAdminNotification,
   ManagedComment,
+  ManagedCommentModerationHitRuleStat,
+  ManagedCommentModerationHitStats,
   ManagedCommentModerationRules,
   ManagedCommentStatus,
   ManagedFriend,
   ManagedMediaAsset,
+  ManagedNotification,
+  ManagedNotificationSettings,
   ManagedProject
 } from '~/types/admin'
 
@@ -31,6 +40,19 @@ const { searchContentItems } = useArticleSearch()
 const adminAuthRedirecting = ref(false)
 const adminCsrfToken = ref('')
 let adminAuthCheckTimer: ReturnType<typeof setInterval> | undefined
+
+const createEmptyAdminSessionStatus = (): AdminSessionStatus => ({
+  authenticated: false,
+  configured: false,
+  username: 'admin',
+  csrfToken: '',
+  expiresAt: '',
+  secondsRemaining: 0,
+  checkedAt: '',
+  checking: false
+})
+
+const adminSessionStatus = ref<AdminSessionStatus>(createEmptyAdminSessionStatus())
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
@@ -82,13 +104,19 @@ const checkAdminSession = async () => {
     return
   }
 
+  adminSessionStatus.value = {
+    ...adminSessionStatus.value,
+    checking: true
+  }
+
   try {
-    const session = await $fetch<{
-      authenticated: boolean
-      configured: boolean
-      username: string
-      csrfToken: string
-    }>('/api/admin/auth/session')
+    const session = await $fetch<Omit<AdminSessionStatus, 'checkedAt' | 'checking'>>('/api/admin/auth/session')
+
+    adminSessionStatus.value = {
+      ...session,
+      checkedAt: new Date().toISOString(),
+      checking: false
+    }
 
     if (!session.authenticated) {
       await redirectToAdminLogin()
@@ -97,6 +125,14 @@ const checkAdminSession = async () => {
 
     adminCsrfToken.value = session.csrfToken || ''
   } catch {
+    adminSessionStatus.value = {
+      ...adminSessionStatus.value,
+      authenticated: false,
+      csrfToken: '',
+      secondsRemaining: 0,
+      checkedAt: new Date().toISOString(),
+      checking: false
+    }
     await redirectToAdminLogin()
   }
 }
@@ -224,6 +260,80 @@ const { data: sourceAdminLogs } = await useAsyncData('admin-api-logs', () =>
     default: () => []
   }
 )
+const emptyVisitStats = (): AdminVisitStats => ({
+  totalViews: 0,
+  trackedArticles: 0,
+  activeVisitors: 0,
+  updatedAt: '',
+  trend: [],
+  topArticles: [],
+  recentArticles: [],
+  quietArticles: []
+})
+const { data: sourceVisitStats, refresh: refreshVisitStats } = await useAsyncData('admin-api-visit-stats', () =>
+  adminFetch<AdminVisitStats>('/api/admin/analytics/views').catch(emptyVisitStats),
+  {
+    default: emptyVisitStats
+  }
+)
+const { data: sourceNotifications } = await useAsyncData('admin-api-site-notifications', () =>
+  adminFetch<ManagedNotification[]>('/api/admin/site-notifications').catch(() => []),
+  {
+    default: () => []
+  }
+)
+const defaultNotificationSettings = (): ManagedNotificationSettings => ({
+  emailEnabled: false,
+  emailTo: '',
+  emailFrom: '',
+  events: [
+    {
+      key: 'friend.apply',
+      label: '友链申请',
+      description: '前台提交新的友链申请时触发。',
+      siteEnabled: true,
+      emailEnabled: true,
+      important: true
+    },
+    {
+      key: 'comment.waiting',
+      label: '待审评论',
+      description: '评论进入待审核状态时触发。',
+      siteEnabled: true,
+      emailEnabled: true,
+      important: true
+    },
+    {
+      key: 'ai.summary.error',
+      label: 'AI 摘要失败',
+      description: '文章 AI 摘要生成失败或缺少 API Key 时触发。',
+      siteEnabled: true,
+      emailEnabled: true,
+      important: true
+    },
+    {
+      key: 'build.failure',
+      label: '构建失败',
+      description: '构建失败事件写入时触发。',
+      siteEnabled: true,
+      emailEnabled: true,
+      important: true
+    }
+  ]
+})
+const cloneNotificationSettings = (settings: ManagedNotificationSettings) => JSON.parse(JSON.stringify(settings)) as ManagedNotificationSettings
+const { data: sourceAdminNotifications } = await useAsyncData('admin-api-notification-events', () =>
+  adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events').catch(() => []),
+  {
+    default: () => []
+  }
+)
+const { data: sourceNotificationSettings } = await useAsyncData('admin-api-notification-settings', () =>
+  adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings').catch(defaultNotificationSettings),
+  {
+    default: defaultNotificationSettings
+  }
+)
 const defaultCommentModerationRules = (): ManagedCommentModerationRules => ({
   enabled: true,
   maxLinks: 3,
@@ -249,7 +359,9 @@ const panels: AdminPanelItem[] = [
   { key: 'projects', label: '项目', icon: 'lucide:folder-kanban' },
   { key: 'friends', label: '友链', icon: 'lucide:link' },
   { key: 'comments', label: '评论', icon: 'lucide:message-square-text' },
+  { key: 'notifications', label: '通知', icon: 'lucide:bell' },
   { key: 'about', label: '关于', icon: 'lucide:user-round-pen' },
+  { key: 'seo', label: 'SEO', icon: 'lucide:search-check' },
   { key: 'backup', label: '备份', icon: 'lucide:database-backup' },
   { key: 'logs', label: '日志', icon: 'lucide:scroll-text' }
 ]
@@ -265,6 +377,8 @@ const aboutPreviewPending = ref(false)
 const aboutPreviewError = ref('')
 const commentsLoading = ref(false)
 const commentsError = ref('')
+const visitStatsLoading = ref(false)
+const visitStatsError = ref('')
 const commentRulesSaving = ref(false)
 const friendInspecting = ref(false)
 const friendInspectingIds = ref<string[]>([])
@@ -293,6 +407,10 @@ const mediaAssets = ref<ManagedMediaAsset[]>(sourceMediaAssets.value)
 const articleVersions = ref<ManagedArticleVersion[]>(sourceArticleVersions.value)
 const articleAutosaves = ref<ManagedArticleAutosave[]>(sourceArticleAutosaves.value)
 const adminLogs = ref<ManagedAdminLog[]>(sourceAdminLogs.value)
+const visitStats = ref<AdminVisitStats>(sourceVisitStats.value)
+const managedNotifications = ref<ManagedNotification[]>(sourceNotifications.value)
+const adminNotifications = ref<ManagedAdminNotification[]>(sourceAdminNotifications.value)
+const notificationSettings = ref(cloneNotificationSettings(sourceNotificationSettings.value))
 const aboutTitle = ref(sourceAbout.value.title)
 const aboutDescription = ref(sourceAbout.value.description)
 const aboutMarkdown = ref(sourceAbout.value.markdown)
@@ -515,7 +633,10 @@ const runUndoAction = async (action: AdminUndoAction) => {
 const articleCount = computed(() => managedArticles.value.length)
 const projectCount = computed(() => managedProjects.value.length)
 const commentCount = computed(() => managedComments.value.length)
-const totalViews = computed(() => managedArticles.value.reduce((total, article) => total + article.views, 0))
+const totalViews = computed(() => Math.max(
+  visitStats.value.totalViews,
+  managedArticles.value.reduce((total, article) => total + article.views, 0)
+))
 const lockedCount = computed(() => managedArticles.value.filter((article) => article.locked).length)
 const pendingFriendCount = computed(() => managedFriends.value.filter((friend) => friend.status === '待审核').length)
 const friendStats = computed(() => ({
@@ -545,6 +666,53 @@ const commentStats = computed(() => ({
   waiting: managedComments.value.filter((comment) => comment.status === 'waiting').length,
   spam: managedComments.value.filter((comment) => comment.status === 'spam').length
 }))
+const commentModerationHitStats = computed<ManagedCommentModerationHitStats>(() => {
+  const ruleStats = new Map<string, ManagedCommentModerationHitRuleStat>()
+  let totalHits = 0
+  let hitComments = 0
+  let reviewHits = 0
+  let spamHits = 0
+
+  for (const comment of managedComments.value) {
+    const reasons = comment.moderation?.reasons || []
+
+    if (reasons.length > 0) {
+      hitComments += 1
+    }
+
+    for (const reason of reasons) {
+      totalHits += 1
+
+      if (reason.severity === 'spam') {
+        spamHits += 1
+      } else {
+        reviewHits += 1
+      }
+
+      const current = ruleStats.get(reason.id) || {
+        id: reason.id,
+        label: reason.label,
+        severity: reason.severity,
+        count: 0
+      }
+
+      current.count += 1
+      current.label = reason.label
+      current.severity = reason.severity
+      ruleStats.set(reason.id, current)
+    }
+  }
+
+  return {
+    totalHits,
+    hitComments,
+    reviewHits,
+    spamHits,
+    rules: Array.from(ruleStats.values()).sort((a, b) => (
+      b.count - a.count || a.label.localeCompare(b.label, 'zh-CN')
+    ))
+  }
+})
 const articleWorkflowCounts = computed(() => articleWorkflowOptions.reduce((counts, option) => ({
   ...counts,
   [option.value]: managedArticles.value.filter((article) => (
@@ -723,6 +891,8 @@ const publishChecks = computed<ArticlePublishCheck[]>(() => {
   const scheduledDateIsValid = Boolean(draftScheduledAt.value) && !Number.isNaN(scheduledDate.getTime())
   const scheduledDateIsFuture = scheduledDateIsValid && scheduledDate.getTime() > today.getTime()
   const usesScheduledPublish = draftWorkflowStatus.value === 'scheduled'
+  const willEnterPublicCollection = draftWorkflowStatus.value === 'published' || usesScheduledPublish
+  const willEnterFeeds = willEnterPublicCollection && draftLocked.value !== true
   const dateNotTooFuture = dateIsValid
     ? usesScheduledPublish || publishedDate.getTime() <= today.getTime() + 1000 * 60 * 60 * 24
     : false
@@ -803,6 +973,42 @@ const publishChecks = computed<ArticlePublishCheck[]>(() => {
       '未发现同名文章。',
       '已存在同名文章，新建发布会覆盖同 slug 文件，请先调整标题。',
       'error'
+    ),
+    createPublishCheck(
+      'seo-title',
+      'SEO 标题',
+      title.length >= 6 && title.length <= 70,
+      `标题长度 ${title.length}，适合搜索结果展示。`,
+      'SEO 标题建议 6-70 个字符，避免搜索结果截断或语义不足。',
+      'warning'
+    ),
+    createPublishCheck(
+      'seo-description',
+      'SEO 摘要',
+      description.length >= 30 && description.length <= 160,
+      `摘要长度 ${description.length}，适合作为页面 description 与订阅摘要。`,
+      'SEO 摘要建议 30-160 个字符，发布后会用于页面 description 与订阅摘要。',
+      'warning'
+    ),
+    createPublishCheck(
+      'seo-public-entry',
+      '搜索索引入口',
+      willEnterPublicCollection,
+      draftLocked.value
+        ? '保存后会进入公开文章集合与 sitemap；文章页会显示锁定状态，请确认这是预期。'
+        : '保存后会进入公开文章集合，并可被 sitemap 收录。',
+      '只有已发布文章，或到达定时时间的定时文章，才会进入公开文章集合与 sitemap。',
+      'error'
+    ),
+    createPublishCheck(
+      'feed-entry',
+      '订阅源入口',
+      willEnterFeeds,
+      '保存后会进入 RSS、Atom 和 JSON Feed；OPML 会继续指向这些订阅源。',
+      draftLocked.value
+        ? '锁定文章不会进入 RSS、Atom 和 JSON Feed，请确认订阅端是否需要看到这篇文章。'
+        : '只有已发布文章，或到达定时时间的定时文章，才会进入 RSS、Atom 和 JSON Feed。',
+      willEnterPublicCollection ? 'warning' : 'error'
     )
   ]
 })
@@ -844,6 +1050,14 @@ const selectPanel = (panel: AdminPanel) => {
 
   if (panel === 'logs') {
     void refreshLogs()
+  }
+
+  if (panel === 'notifications') {
+    void refreshAdminNotifications()
+  }
+
+  if (panel === 'overview') {
+    void refreshVisits()
   }
 }
 
@@ -898,11 +1112,14 @@ const replaceArticle = (article: ManagedArticle) => {
 }
 
 const refreshAdminContent = async () => {
-  const [articles, projects, friends, about] = await Promise.all([
+  const [articles, projects, friends, about, notifications, notificationEvents, settings] = await Promise.all([
     adminFetch<ManagedArticle[]>('/api/admin/articles'),
     adminFetch<ManagedProject[]>('/api/admin/projects'),
     adminFetch<ManagedFriend[]>('/api/admin/friends'),
-    adminFetch<ManagedAboutPage>('/api/admin/about')
+    adminFetch<ManagedAboutPage>('/api/admin/about'),
+    adminFetch<ManagedNotification[]>('/api/admin/site-notifications'),
+    adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events'),
+    adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings')
   ])
 
   managedArticles.value = articles
@@ -911,6 +1128,9 @@ const refreshAdminContent = async () => {
   aboutTitle.value = about.title
   aboutDescription.value = about.description
   aboutMarkdown.value = about.markdown
+  managedNotifications.value = notifications
+  adminNotifications.value = notificationEvents
+  notificationSettings.value = cloneNotificationSettings(settings)
 
   if (!articles.some((article) => article.id === selectedArticleId.value)) {
     if (articles[0]) {
@@ -964,6 +1184,72 @@ const refreshLogs = async () => {
   }
 }
 
+const refreshVisits = async () => {
+  visitStatsLoading.value = true
+  visitStatsError.value = ''
+
+  try {
+    await refreshVisitStats()
+    visitStats.value = sourceVisitStats.value || emptyVisitStats()
+  } catch {
+    visitStatsError.value = '访问统计读取失败，请检查登录态和服务端日志。'
+  } finally {
+    visitStatsLoading.value = false
+  }
+}
+
+const saveNotifications = async () => {
+  saving.value = true
+
+  try {
+    managedNotifications.value = await adminFetch<ManagedNotification[]>('/api/admin/site-notifications', {
+      method: 'POST',
+      body: {
+        notifications: managedNotifications.value
+      }
+    })
+    setAdminNotice('站内通知配置已保存。')
+    void refreshLogs()
+  } catch {
+    setAdminNotice('站内通知保存失败，请检查登录态和服务端日志。')
+  } finally {
+    saving.value = false
+  }
+}
+
+const refreshAdminNotifications = async () => {
+  try {
+    const [events, settings] = await Promise.all([
+      adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events'),
+      adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings')
+    ])
+
+    adminNotifications.value = events
+    notificationSettings.value = cloneNotificationSettings(settings)
+  } catch {
+    setAdminNotice('后台通知读取失败，请检查登录态和服务端日志。')
+  }
+}
+
+const saveNotificationSettings = async () => {
+  saving.value = true
+
+  try {
+    const settings = await adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings', {
+      method: 'POST',
+      body: notificationSettings.value
+    })
+
+    notificationSettings.value = cloneNotificationSettings(settings)
+    setAdminNotice('通知邮件发送策略已保存。')
+    void refreshLogs()
+  } catch {
+    setAdminNotice('通知邮件策略保存失败，请检查登录态和服务端日志。')
+  } finally {
+    saving.value = false
+  }
+}
+
 const refreshMedia = async () => {
   mediaError.value = ''
 
@@ -974,18 +1260,30 @@ const refreshMedia = async () => {
   }
 }
 
-const getBackupFilename = (backup: AdminBackupPayload) => {
-  const timestamp = String(backup.createdAt || new Date().toISOString()).replace(/[:.]/g, '-')
-
-  return `chankoblog-backup-${timestamp}.json`
+const backupScopeLabels: Record<AdminBackupScope, string> = {
+  full: '完整',
+  articles: '文章',
+  media: '媒体',
+  projects: '项目',
+  friends: '友链',
+  about: '关于',
+  comments: '评论',
+  notifications: '通知'
 }
 
-const exportBackup = async () => {
+const getBackupFilename = (backup: AdminBackupPayload) => {
+  const timestamp = String(backup.createdAt || new Date().toISOString()).replace(/[:.]/g, '-')
+  const scope = backup.scope || 'full'
+
+  return `chankoblog-backup-${scope}-${timestamp}.json`
+}
+
+const exportBackup = async (scope: AdminBackupScope = 'full') => {
   backupLoading.value = true
   backupError.value = ''
 
   try {
-    const backup = await adminFetch<AdminBackupPayload>('/api/admin/backup')
+    const backup = await adminFetch<AdminBackupPayload>(`/api/admin/backup?scope=${encodeURIComponent(scope)}`)
     const blob = new Blob([`${JSON.stringify(backup, null, 2)}\n`], {
       type: 'application/json;charset=utf-8'
     })
@@ -999,13 +1297,20 @@ const exportBackup = async () => {
     link.remove()
     URL.revokeObjectURL(url)
     void refreshLogs()
-    setAdminNotice(`已导出备份，包含 ${backup.files.length} 个文件和 ${backup.database?.walineComments.length || 0} 条评论记录。`)
+    setAdminNotice(`已导出${backupScopeLabels[scope]}备份，包含 ${backup.files.length} 个文件和 ${backup.database?.walineComments.length || 0} 条评论记录。`)
   } catch {
     backupError.value = '备份导出失败，请检查服务端日志。'
   } finally {
     backupLoading.value = false
   }
 }
+
+const previewBackupRestore = (backup: AdminBackupPayload) => (
+  adminFetch<AdminBackupRestorePreview>('/api/admin/backup/preview', {
+    method: 'POST',
+    body: backup
+  })
+)
 
 const restoreBackup = async (backup: AdminBackupPayload) => {
   const confirmed = await requestAdminConfirmation({
@@ -1033,6 +1338,7 @@ const restoreBackup = async (backup: AdminBackupPayload) => {
       refreshMedia(),
       refreshComments(),
       refreshArticleReliability(),
+      refreshVisits(),
       refreshLogs()
     ])
     setAdminNotice(`已恢复 ${backupRestoreResult.value.restoredCount} 个文件。`)
@@ -2461,6 +2767,7 @@ const initializeAdminPage = async () => {
   void refreshMedia()
   void refreshComments()
   void refreshArticleReliability()
+  void refreshVisits()
   void refreshLogs()
 }
 
@@ -2489,6 +2796,7 @@ useSiteSeo({
     :active-panel="activePanel"
     :panels="panels"
     :notice="adminNotice"
+    :session-status="adminSessionStatus"
     @select-panel="selectPanel"
     @create-article="createArticle"
     @logout="logoutAdmin"
@@ -2501,6 +2809,10 @@ useSiteSeo({
       :latest-comments="latestComments"
       :comments-loading="commentsLoading"
       :comments-error="commentsError"
+      :visit-stats="visitStats"
+      :visit-stats-loading="visitStatsLoading"
+      :visit-stats-error="visitStatsError"
+      @refresh-visits="refreshVisits"
     />
 
     <section
@@ -2575,6 +2887,7 @@ useSiteSeo({
       @select-article-autosave="selectArticleAutosave"
       @delete-article-autosave="deleteArticleAutosaveEntry"
       @save-draft="saveDraft"
+      @export-backup="exportBackup('articles')"
     />
 
     <AdminMediaPanel
@@ -2587,6 +2900,7 @@ useSiteSeo({
       @delete-media="deleteMedia"
       @delete-selected-media="deleteSelectedMedia"
       @refresh-media="refreshMedia"
+      @export-backup="exportBackup('media')"
     />
 
     <AdminProjectsPanel
@@ -2625,6 +2939,7 @@ useSiteSeo({
       @inspect-projects="inspectProjects"
       @move-project="moveProject"
       @delete-project="deleteProject"
+      @export-backup="exportBackup('projects')"
     />
 
     <AdminFriendsPanel
@@ -2658,6 +2973,7 @@ useSiteSeo({
       @inspect-friend="inspectFriend"
       @inspect-friends="inspectFriends"
       @delete-friend="deleteFriend"
+      @export-backup="exportBackup('friends')"
     />
 
     <AdminAboutPanel
@@ -2670,6 +2986,7 @@ useSiteSeo({
       :preview-pending="aboutPreviewPending"
       :preview-error="aboutPreviewError"
       @save-about="saveAbout"
+      @export-backup="exportBackup('about')"
     />
 
     <AdminCommentsPanel
@@ -2679,6 +2996,7 @@ useSiteSeo({
       v-model:selected-comment-ids="selectedCommentIds"
       :comments="filteredManagedComments"
       :stats="commentStats"
+      :moderation-hit-stats="commentModerationHitStats"
       v-model:moderation-rules="commentModerationRules"
       :saving="saving"
       :rules-saving="commentRulesSaving"
@@ -2691,6 +3009,33 @@ useSiteSeo({
       @bulk-delete-comments="bulkDeleteComments"
       @moderate-comments="moderateComments"
       @delete-comment="deleteComment"
+      @export-backup="exportBackup('comments')"
+    />
+
+    <AdminNotificationsPanel
+      v-show="activePanel === 'notifications'"
+      v-model:notifications="managedNotifications"
+      v-model:notification-settings="notificationSettings"
+      :admin-notifications="adminNotifications"
+      :notification-settings="notificationSettings"
+      :saving="saving"
+      @save-notifications="saveNotifications"
+      @save-notification-settings="saveNotificationSettings"
+      @refresh-admin-notifications="refreshAdminNotifications"
+      @select-panel="selectPanel"
+      @export-backup="exportBackup('notifications')"
+    />
+
+    <AdminSeoPanel
+      v-show="activePanel === 'seo'"
+      :articles="managedArticles"
+      :projects="managedProjects"
+      :friends="managedFriends"
+      :about="{
+        title: aboutTitle,
+        description: aboutDescription,
+        markdown: aboutMarkdown
+      }"
     />
 
     <AdminBackupPanel
@@ -2698,6 +3043,7 @@ useSiteSeo({
       :loading="backupLoading"
       :error="backupError"
       :result="backupRestoreResult"
+      :preview-backup="previewBackupRestore"
       @export-backup="exportBackup"
       @restore-backup="restoreBackup"
     />

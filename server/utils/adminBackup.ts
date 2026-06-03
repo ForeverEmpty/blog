@@ -24,9 +24,65 @@ export type AdminBackupPayload = {
   version: 1
   app: 'ChankoBlog'
   createdAt: string
+  scope?: AdminBackupScope
   files: AdminBackupFile[]
   database?: AdminBackupDatabase
 }
+
+export type AdminBackupRestorePreviewFile = {
+  path: string
+  category: AdminBackupScope
+  encoding: AdminBackupFile['encoding']
+  bytes: number
+  exists: boolean
+  changed: boolean
+}
+
+export type AdminBackupRestorePreviewSection = {
+  category: AdminBackupScope
+  label: string
+  count: number
+  bytes: number
+  createCount: number
+  overwriteCount: number
+  changedCount: number
+  samplePaths: string[]
+}
+
+export type AdminBackupRestorePreview = {
+  valid: boolean
+  app: 'ChankoBlog'
+  version: 1
+  scope: AdminBackupScope
+  createdAt: string
+  fileCount: number
+  totalBytes: number
+  createCount: number
+  overwriteCount: number
+  changedCount: number
+  unchangedCount: number
+  sections: AdminBackupRestorePreviewSection[]
+  files: AdminBackupRestorePreviewFile[]
+  database: {
+    walineComments: number
+    adminLogs: number
+    articleVersions: number
+    articleAutosaves: number
+    errors: string[]
+  }
+  warnings: string[]
+  errors: string[]
+}
+
+export type AdminBackupScope =
+  | 'full'
+  | 'articles'
+  | 'media'
+  | 'projects'
+  | 'friends'
+  | 'about'
+  | 'comments'
+  | 'notifications'
 
 type BackupRoot = {
   base: string
@@ -42,7 +98,15 @@ const mediaRoot = () => resolve(process.cwd(), 'public', 'media')
 const restorePointRoot = () => resolve(dataRoot(), 'backups')
 const maxRestoreFileBytes = 40 * 1024 * 1024
 const maxRestoreTotalBytes = 220 * 1024 * 1024
-const allowedDataFiles = new Set(['comments.json', 'friends.json', 'projects.json', 'views.json'])
+const allowedDataFiles = new Set([
+  'admin-notifications.json',
+  'comments.json',
+  'friends.json',
+  'notification-settings.json',
+  'notifications.json',
+  'projects.json',
+  'views.json'
+])
 const allowedMediaExtensions = new Set([
   '.avif',
   '.gif',
@@ -58,6 +122,32 @@ const allowedMediaExtensions = new Set([
   '.webp'
 ])
 const { Client } = pg
+const adminBackupScopes = new Set<AdminBackupScope>([
+  'full',
+  'articles',
+  'media',
+  'projects',
+  'friends',
+  'about',
+  'comments',
+  'notifications'
+])
+const backupScopeLabels: Record<AdminBackupScope, string> = {
+  full: '完整',
+  articles: '文章',
+  media: '媒体',
+  projects: '项目',
+  friends: '友链',
+  about: '关于',
+  comments: '评论',
+  notifications: '通知'
+}
+
+export const normalizeAdminBackupScope = (value: unknown): AdminBackupScope => (
+  typeof value === 'string' && adminBackupScopes.has(value as AdminBackupScope)
+    ? value as AdminBackupScope
+    : 'full'
+)
 
 const getWalinePostgresConfig = () => ({
   host: process.env.WALINE_POSTGRES_HOST || process.env.PG_HOST || '127.0.0.1',
@@ -89,23 +179,70 @@ const withBackupClient = async <T>(
   }
 }
 
-const getBackupRoots = (): BackupRoot[] => [
+const getBackupRoots = (scope: AdminBackupScope = 'full'): BackupRoot[] => [
   {
     base: contentRoot(),
     relativeBase: 'content',
-    include: (absolutePath) => extname(absolutePath).toLowerCase() === '.md',
+    include: (absolutePath) => {
+      if (extname(absolutePath).toLowerCase() !== '.md') {
+        return false
+      }
+
+      const relativePath = relative(contentRoot(), absolutePath).replace(/\\/g, '/')
+
+      if (scope === 'articles') {
+        return relativePath.startsWith('blog/')
+      }
+
+      if (scope === 'about') {
+        return relativePath === 'about.md'
+      }
+
+      return scope === 'full'
+    },
     encoding: 'utf8'
   },
   {
     base: dataRoot(),
     relativeBase: 'data',
-    include: (absolutePath) => allowedDataFiles.has(relative(dataRoot(), absolutePath).replace(/\\/g, '/')),
+    include: (absolutePath) => {
+      const relativePath = relative(dataRoot(), absolutePath).replace(/\\/g, '/')
+
+      if (!allowedDataFiles.has(relativePath)) {
+        return false
+      }
+
+      if (scope === 'projects') {
+        return relativePath === 'projects.json'
+      }
+
+      if (scope === 'friends') {
+        return relativePath === 'friends.json'
+      }
+
+      if (scope === 'comments') {
+        return relativePath === 'comments.json'
+      }
+
+      if (scope === 'notifications') {
+        return ['admin-notifications.json', 'notification-settings.json', 'notifications.json'].includes(relativePath)
+      }
+
+      if (scope === 'articles') {
+        return relativePath === 'views.json'
+      }
+
+      return scope === 'full'
+    },
     encoding: 'utf8'
   },
   {
     base: mediaRoot(),
     relativeBase: 'public/media',
-    include: (absolutePath) => allowedMediaExtensions.has(extname(absolutePath).toLowerCase()),
+    include: (absolutePath) => (
+      (scope === 'full' || scope === 'media') &&
+      allowedMediaExtensions.has(extname(absolutePath).toLowerCase())
+    ),
     encoding: 'base64'
   }
 ]
@@ -170,7 +307,7 @@ const readOptionalTableRows = async (
   }
 }
 
-const createDatabaseBackup = async (): Promise<AdminBackupDatabase> => {
+const createDatabaseBackup = async (scope: AdminBackupScope = 'full'): Promise<AdminBackupDatabase> => {
   const database: AdminBackupDatabase = {
     walineComments: [],
     adminLogs: [],
@@ -179,44 +316,51 @@ const createDatabaseBackup = async (): Promise<AdminBackupDatabase> => {
     errors: []
   }
 
-  try {
-    database.walineComments = await withBackupClient(getWalinePostgresConfig(), (client) =>
-      readOptionalTableRows(client, 'wl_comment', database.errors)
-    )
-  } catch (error) {
-    database.errors.push(`waline: ${error instanceof Error ? error.message : 'connection failed'}`)
+  if (scope === 'full' || scope === 'comments') {
+    try {
+      database.walineComments = await withBackupClient(getWalinePostgresConfig(), (client) =>
+        readOptionalTableRows(client, 'wl_comment', database.errors)
+      )
+    } catch (error) {
+      database.errors.push(`waline: ${error instanceof Error ? error.message : 'connection failed'}`)
+    }
   }
 
-  try {
-    await ensureAdminDatabase()
-    await withBackupClient(getAdminPostgresConfig(), async (client) => {
-      const [adminLogs, articleVersions, articleAutosaves] = await Promise.all([
-        readOptionalTableRows(client, 'admin_logs', database.errors),
-        readOptionalTableRows(client, 'article_versions', database.errors),
-        readOptionalTableRows(client, 'article_autosaves', database.errors)
-      ])
+  if (scope === 'full' || scope === 'articles') {
+    try {
+      await ensureAdminDatabase()
+      await withBackupClient(getAdminPostgresConfig(), async (client) => {
+        const [articleVersions, articleAutosaves] = await Promise.all([
+          readOptionalTableRows(client, 'article_versions', database.errors),
+          readOptionalTableRows(client, 'article_autosaves', database.errors)
+        ])
 
-      database.adminLogs = adminLogs
-      database.articleVersions = articleVersions
-      database.articleAutosaves = articleAutosaves
-    })
-  } catch (error) {
-    database.errors.push(`admin: ${error instanceof Error ? error.message : 'connection failed'}`)
+        database.articleVersions = articleVersions
+        database.articleAutosaves = articleAutosaves
+
+        if (scope === 'full') {
+          database.adminLogs = await readOptionalTableRows(client, 'admin_logs', database.errors)
+        }
+      })
+    } catch (error) {
+      database.errors.push(`admin: ${error instanceof Error ? error.message : 'connection failed'}`)
+    }
   }
 
   return database
 }
 
-export const createAdminBackup = async (): Promise<AdminBackupPayload> => {
-  const files = (await Promise.all(getBackupRoots().map((root) => readDirectoryFiles(root))))
+export const createAdminBackup = async (scope: AdminBackupScope = 'full'): Promise<AdminBackupPayload> => {
+  const files = (await Promise.all(getBackupRoots(scope).map((root) => readDirectoryFiles(root))))
     .flat()
     .sort((a, b) => a.path.localeCompare(b.path))
-  const database = await createDatabaseBackup()
+  const database = await createDatabaseBackup(scope)
 
   return {
     version: backupVersion,
     app: 'ChankoBlog',
     createdAt: new Date().toISOString(),
+    scope,
     files,
     database
   }
@@ -286,6 +430,101 @@ const getBackupFileBytes = (file: AdminBackupFile) => {
   }
 
   return Buffer.byteLength(file.content, 'utf8')
+}
+
+const getBackupFileBuffer = (file: AdminBackupFile) => (
+  file.encoding === 'base64'
+    ? Buffer.from(file.content, 'base64')
+    : Buffer.from(file.content, 'utf8')
+)
+
+const getBackupFileCategory = (filePath: string): AdminBackupScope => {
+  if (filePath.startsWith('content/blog/')) {
+    return 'articles'
+  }
+
+  if (filePath === 'content/about.md') {
+    return 'about'
+  }
+
+  if (filePath.startsWith('public/media/')) {
+    return 'media'
+  }
+
+  if (filePath === 'data/projects.json') {
+    return 'projects'
+  }
+
+  if (filePath === 'data/friends.json') {
+    return 'friends'
+  }
+
+  if (filePath === 'data/comments.json') {
+    return 'comments'
+  }
+
+  if (['data/admin-notifications.json', 'data/notification-settings.json', 'data/notifications.json'].includes(filePath)) {
+    return 'notifications'
+  }
+
+  return 'full'
+}
+
+const validateRestoreFiles = (backup: AdminBackupPayload) => {
+  let totalBytes = 0
+
+  for (const file of backup.files) {
+    if (
+      typeof file.path !== 'string' ||
+      typeof file.content !== 'string' ||
+      (file.encoding !== 'utf8' && file.encoding !== 'base64')
+    ) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid backup file'
+      })
+    }
+
+    const fileBytes = getBackupFileBytes(file)
+
+    if (fileBytes > maxRestoreFileBytes) {
+      throw createError({
+        statusCode: 413,
+        statusMessage: `Backup file is too large: ${file.path}`
+      })
+    }
+
+    totalBytes += fileBytes
+
+    if (totalBytes > maxRestoreTotalBytes) {
+      throw createError({
+        statusCode: 413,
+        statusMessage: 'Backup payload is too large'
+      })
+    }
+
+    resolveRestorePath(file.path)
+  }
+
+  return {
+    totalBytes
+  }
+}
+
+const getRestorePreviewFile = async (file: AdminBackupFile): Promise<AdminBackupRestorePreviewFile> => {
+  const target = resolveRestorePath(file.path)
+  const bytes = getBackupFileBytes(file)
+  const existing = await readFile(target).catch(() => null)
+  const incoming = getBackupFileBuffer(file)
+
+  return {
+    path: file.path,
+    category: getBackupFileCategory(file.path),
+    encoding: file.encoding,
+    bytes,
+    exists: existing !== null,
+    changed: existing === null || !Buffer.from(existing).equals(incoming)
+  }
 }
 
 const quoteIdentifier = (value: string) => `"${value.replace(/"/g, '""')}"`
@@ -446,49 +685,13 @@ export const saveAdminRestorePoint = async () => {
 
 export const restoreAdminBackup = async (backup: unknown) => {
   assertBackupShape(backup)
-
-  let totalBytes = 0
-
-  for (const file of backup.files) {
-    if (
-      typeof file.path !== 'string' ||
-      typeof file.content !== 'string' ||
-      (file.encoding !== 'utf8' && file.encoding !== 'base64')
-    ) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid backup file'
-      })
-    }
-
-    const fileBytes = getBackupFileBytes(file)
-
-    if (fileBytes > maxRestoreFileBytes) {
-      throw createError({
-        statusCode: 413,
-        statusMessage: `Backup file is too large: ${file.path}`
-      })
-    }
-
-    totalBytes += fileBytes
-
-    if (totalBytes > maxRestoreTotalBytes) {
-      throw createError({
-        statusCode: 413,
-        statusMessage: 'Backup payload is too large'
-      })
-    }
-
-    resolveRestorePath(file.path)
-  }
+  validateRestoreFiles(backup)
 
   const restorePoint = await saveAdminRestorePoint()
 
   for (const file of backup.files) {
     const target = resolveRestorePath(file.path)
-    const content = file.encoding === 'base64'
-      ? Buffer.from(file.content, 'base64')
-      : file.content
+    const content = file.encoding === 'base64' ? getBackupFileBuffer(file) : file.content
 
     await mkdir(dirname(target), { recursive: true })
     await writeFile(target, content)
@@ -507,5 +710,69 @@ export const restoreAdminBackup = async (backup: unknown) => {
     restoredBytes: restoredFileStats.reduce((total, item) => total + item.bytes, 0),
     restorePoint,
     database
+  }
+}
+
+export const previewAdminBackupRestore = async (backup: unknown): Promise<AdminBackupRestorePreview> => {
+  assertBackupShape(backup)
+
+  const { totalBytes } = validateRestoreFiles(backup)
+  const files = await Promise.all(backup.files.map(getRestorePreviewFile))
+  const sections = Object.values(files.reduce((result, file) => {
+    const current = result[file.category] || {
+      category: file.category,
+      label: backupScopeLabels[file.category],
+      count: 0,
+      bytes: 0,
+      createCount: 0,
+      overwriteCount: 0,
+      changedCount: 0,
+      samplePaths: []
+    }
+
+    current.count += 1
+    current.bytes += file.bytes
+    current.createCount += file.exists ? 0 : 1
+    current.overwriteCount += file.exists ? 1 : 0
+    current.changedCount += file.changed ? 1 : 0
+
+    if (current.samplePaths.length < 6) {
+      current.samplePaths.push(file.path)
+    }
+
+    result[file.category] = current
+
+    return result
+  }, {} as Record<AdminBackupScope, AdminBackupRestorePreviewSection>))
+    .sort((a, b) => b.count - a.count)
+  const database = backup.database
+
+  return {
+    valid: true,
+    app: 'ChankoBlog',
+    version: backupVersion,
+    scope: backup.scope || 'full',
+    createdAt: backup.createdAt,
+    fileCount: files.length,
+    totalBytes,
+    createCount: files.filter((file) => !file.exists).length,
+    overwriteCount: files.filter((file) => file.exists).length,
+    changedCount: files.filter((file) => file.changed).length,
+    unchangedCount: files.filter((file) => !file.changed).length,
+    sections,
+    files,
+    database: {
+      walineComments: normalizeDatabaseRows(database?.walineComments).length,
+      adminLogs: normalizeDatabaseRows(database?.adminLogs).length,
+      articleVersions: normalizeDatabaseRows(database?.articleVersions).length,
+      articleAutosaves: normalizeDatabaseRows(database?.articleAutosaves).length,
+      errors: Array.isArray(database?.errors) ? database.errors.map(String) : []
+    },
+    warnings: [
+      files.some((file) => file.exists && file.changed) ? '恢复会覆盖当前同名文件。' : '',
+      files.length === 0 ? '该备份不包含可恢复文件。' : '',
+      database?.errors?.length ? '备份中包含数据库导出错误，相关记录可能不完整。' : ''
+    ].filter(Boolean),
+    errors: []
   }
 }

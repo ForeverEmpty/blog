@@ -91,5 +91,22 @@ export default defineEventHandler(async (event) => {
 
   await writeComments(commentsBySlug)
 
+  if (comment.status === 'waiting') {
+    await createAdminNotificationEvent(event, {
+      source: 'comment.waiting',
+      title: `新的待审评论：${author}`,
+      body: `${author} 在文章 ${slug} 下提交了一条待审核评论。`,
+      level: 'warning',
+      href: 'admin:comments',
+      hrefLabel: '处理评论',
+      targetId: comment.id,
+      payload: {
+        slug,
+        author,
+        status: comment.status
+      }
+    }).catch(() => {})
+  }
+
   return comment
 })

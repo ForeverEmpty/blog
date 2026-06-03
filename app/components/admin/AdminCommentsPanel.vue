@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { ManagedComment, ManagedCommentModerationRules, ManagedCommentStatus } from '~/types/admin'
+import type {
+  ManagedComment,
+  ManagedCommentModerationHitStats,
+  ManagedCommentModerationRules,
+  ManagedCommentStatus
+} from '~/types/admin'
 
 const props = defineProps<{
   comments: ManagedComment[]
@@ -9,6 +14,7 @@ const props = defineProps<{
     waiting: number
     spam: number
   }
+  moderationHitStats: ManagedCommentModerationHitStats
   saving: boolean
   rulesSaving: boolean
   loading: boolean
@@ -23,6 +29,7 @@ const emit = defineEmits<{
   bulkDeleteComments: [ids: string[]]
   moderateComments: [ids: string[]]
   deleteComment: [comment: ManagedComment]
+  exportBackup: []
 }>()
 
 const commentSearchQuery = defineModel<string>('commentSearchQuery', { required: true })
@@ -84,6 +91,14 @@ const allVisibleSelected = computed(() => (
   props.comments.length > 0 &&
   props.comments.every((comment) => selectedCommentIds.value.includes(comment.id))
 ))
+const topModerationHitRules = computed(() => props.moderationHitStats.rules.slice(0, 8))
+const moderationHitRate = computed(() => {
+  if (props.stats.total === 0) {
+    return '0%'
+  }
+
+  return `${Math.round((props.moderationHitStats.hitComments / props.stats.total) * 100)}%`
+})
 
 const setQuickFilter = (value: string) => {
   commentSearchQuery.value = value
@@ -158,6 +173,12 @@ const moderationClass = (status: ManagedCommentStatus) => {
 
   return 'border-callout-success-border bg-callout-success-surface text-callout-success-text'
 }
+
+const moderationSeverityClass = (severity: 'review' | 'spam') => (
+  severity === 'spam'
+    ? 'border-callout-danger-border bg-callout-danger-surface text-callout-danger-text'
+    : 'border-callout-warning-border bg-callout-warning-surface text-callout-warning-text'
+)
 
 const parseRuleList = (value: string) => (
   value
@@ -243,10 +264,16 @@ const formatTime = (value: string) => {
           </select>
         </label>
       </div>
-      <AppButton variant="solid" :loading="props.loading" @click="emit('refreshComments')">
-        <Icon name="lucide:refresh-cw" mode="svg" class="h-4 w-4" aria-hidden="true" />
-        刷新评论
-      </AppButton>
+      <div class="flex flex-wrap gap-(--space-1)">
+        <AppButton variant="outline" :disabled="props.loading || props.saving || props.rulesSaving" @click="emit('exportBackup')">
+          <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+          备份
+        </AppButton>
+        <AppButton variant="solid" :loading="props.loading" @click="emit('refreshComments')">
+          <Icon name="lucide:refresh-cw" mode="svg" class="h-4 w-4" aria-hidden="true" />
+          刷新评论
+        </AppButton>
+      </div>
     </div>
 
     <div class="grid grid-cols-4 border-y border-line max-[920px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="评论治理统计">
@@ -283,6 +310,68 @@ const formatTime = (value: string) => {
         <span class="font-display text-[44px] leading-none text-callout-danger-text">{{ props.stats.spam }}</span>
       </button>
     </div>
+
+    <section class="grid gap-(--space-2) border border-line bg-code-surface p-(--space-3)" aria-label="评论治理命中统计">
+      <div class="flex flex-wrap items-start justify-between gap-(--space-2)">
+        <div class="grid gap-1">
+          <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
+            Moderation Hits
+          </p>
+          <h3 class="m-0 text-xl font-bold leading-tight text-ink">
+            规则命中统计
+          </h3>
+        </div>
+        <span class="border border-line bg-paper px-2 py-1 text-[12px] font-bold uppercase tracking-normal text-muted">
+          命中率 {{ moderationHitRate }}
+        </span>
+      </div>
+
+      <div class="grid grid-cols-4 border border-line bg-paper text-sm max-[920px]:grid-cols-2 max-[520px]:grid-cols-1">
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="font-bold text-muted">命中评论</span>
+          <strong class="font-display text-[32px] font-normal leading-none text-ink">{{ props.moderationHitStats.hitComments }}</strong>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[920px]:border-r-0 max-[920px]:border-b">
+          <span class="font-bold text-muted">总命中</span>
+          <strong class="font-display text-[32px] font-normal leading-none text-ink">{{ props.moderationHitStats.totalHits }}</strong>
+        </div>
+        <div class="grid gap-1 border-r border-line p-(--space-2) max-[520px]:border-r-0 max-[520px]:border-b">
+          <span class="font-bold text-muted">待审命中</span>
+          <strong class="font-display text-[32px] font-normal leading-none text-callout-warning-text">{{ props.moderationHitStats.reviewHits }}</strong>
+        </div>
+        <div class="grid gap-1 p-(--space-2)">
+          <span class="font-bold text-muted">拦截命中</span>
+          <strong class="font-display text-[32px] font-normal leading-none text-callout-danger-text">{{ props.moderationHitStats.spamHits }}</strong>
+        </div>
+      </div>
+
+      <div v-if="topModerationHitRules.length > 0" class="grid gap-(--space-1)">
+        <article
+          v-for="rule in topModerationHitRules"
+          :key="rule.id"
+          class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-(--space-2) border border-line bg-paper p-(--space-2) max-[520px]:grid-cols-1"
+        >
+          <div class="grid min-w-0 gap-1">
+            <div class="flex flex-wrap items-center gap-(--space-1)">
+              <span class="truncate text-sm font-bold text-ink">{{ rule.label }}</span>
+              <span class="border px-1.5 py-0.5 text-[12px] font-bold" :class="moderationSeverityClass(rule.severity)">
+                {{ rule.severity === 'spam' ? '拦截' : '待审' }}
+              </span>
+            </div>
+            <div class="h-1.5 overflow-hidden border border-line bg-code-surface">
+              <div
+                class="h-full bg-ink"
+                :style="{ width: `${Math.max(8, Math.round((rule.count / Math.max(1, props.moderationHitStats.totalHits)) * 100))}%` }"
+              />
+            </div>
+          </div>
+          <strong class="font-display text-[28px] font-normal leading-none text-ink">{{ rule.count }}</strong>
+        </article>
+      </div>
+      <p v-else class="m-0 border border-dashed border-line bg-paper p-(--space-2) text-sm font-bold text-muted">
+        暂无规则命中。刷新评论或执行按规则治理后可查看命中分布。
+      </p>
+    </section>
 
     <details class="group border border-line bg-code-surface" open>
       <summary class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-(--space-2) border-b border-line px-(--space-2) text-sm font-bold text-muted marker:hidden">
@@ -461,7 +550,7 @@ const formatTime = (value: string) => {
                   {{ comment.articleSlug || comment.url }}
                 </button>
               </p>
-              <h2 class="m-0 break-words font-display text-[42px] font-normal leading-none max-[520px]:text-[32px]">
+              <h2 class="m-0 break-words font-display text-[32px] font-normal leading-none max-[520px]:text-[28px]">
                 {{ comment.author || '匿名访客' }}
               </h2>
             </div>

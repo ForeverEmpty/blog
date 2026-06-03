@@ -19,7 +19,8 @@ export default defineAppConfig({
     feed: {
       rss: '/rss.xml',
       atom: '/atom.xml',
-      json: '/feed.json'
+      json: '/feed.json',
+      opml: '/opml.xml'
     }
   },
   navigation: {
@@ -151,6 +152,48 @@ export default defineAppConfig({
       }
     ]
   },
+  subscribe: {
+    eyebrow: 'Subscribe',
+    title: '订阅',
+    description: '通过 RSS、Atom、JSON Feed 或 OPML 把更新接入阅读器，不必反复刷新站点。',
+    copyAction: '复制链接',
+    copiedAction: '已复制',
+    feedItems: [
+      {
+        key: 'rss',
+        label: 'RSS',
+        href: '/rss.xml',
+        type: 'application/rss+xml',
+        description: '兼容性最广，适合 Feedly、Inoreader、FreshRSS 等阅读器。'
+      },
+      {
+        key: 'atom',
+        label: 'Atom',
+        href: '/atom.xml',
+        type: 'application/atom+xml',
+        description: '结构更严格，适合偏标准化的订阅客户端。'
+      },
+      {
+        key: 'json',
+        label: 'JSON Feed',
+        href: '/feed.json',
+        type: 'application/feed+json',
+        description: '面向支持 JSON Feed 的现代工具和自动化流程。'
+      },
+      {
+        key: 'opml',
+        label: 'OPML',
+        href: '/opml.xml',
+        type: 'text/x-opml',
+        description: '用于批量导入阅读器，当前包含本站主要订阅源。'
+      }
+    ],
+    readerItems: [
+      '把 RSS 链接复制到阅读器的添加订阅入口。',
+      '如果阅读器支持 OPML，可以直接导入 OPML 文件。',
+      '订阅内容只包含公开且未锁定的文章。'
+    ]
+  },
   friends: {
     eyebrow: 'Friends',
     title: '友链',
@@ -193,9 +236,11 @@ export default defineAppConfig({
       { label: '关于', href: '/about' }
     ],
     feeds: [
+      { label: '订阅中心', href: '/subscribe' },
       { label: 'RSS', href: '/rss.xml' },
       { label: 'Atom', href: '/atom.xml' },
-      { label: 'JSON Feed', href: '/feed.json' }
+      { label: 'JSON Feed', href: '/feed.json' },
+      { label: 'OPML', href: '/opml.xml' }
     ]
   },
   error: {

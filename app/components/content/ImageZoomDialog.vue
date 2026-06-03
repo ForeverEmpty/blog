@@ -80,7 +80,7 @@ const toggleZoom = () => {
       <div
         v-if="open"
         ref="dialogRef"
-        class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3) backdrop-blur-[1px]"
+        class="fixed inset-0 z-50 grid place-items-center overflow-auto bg-ink/55 p-(--space-3)"
         role="dialog"
         aria-modal="true"
         :aria-label="title || alt || '图片预览'"
@@ -88,7 +88,7 @@ const toggleZoom = () => {
         @click.self="close"
         @keydown.esc="close"
       >
-        <section class="dialog-panel grid max-h-[92vh] w-full max-w-[min(1120px,94vw)] gap-(--space-2) border border-line bg-paper p-(--space-2) text-ink shadow-[12px_12px_0_var(--line)]">
+        <section class="dialog-panel grid max-h-[92vh] w-full max-w-[min(1120px,94vw)] gap-(--space-2) border border-line bg-paper p-(--space-2) text-ink">
           <header class="flex items-center justify-between gap-(--space-2) border-b border-line pb-(--space-2)">
             <div class="grid min-w-0 gap-1">
               <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">

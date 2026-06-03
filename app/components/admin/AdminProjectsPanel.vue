@@ -32,6 +32,7 @@ const emit = defineEmits<{
   inspectProjects: [projects: ManagedProject[]]
   moveProject: [project: ManagedProject, direction: 'up' | 'down']
   deleteProject: [project: ManagedProject]
+  exportBackup: []
 }>()
 
 const projectSearchQuery = defineModel<string>('projectSearchQuery', { required: true })
@@ -138,11 +139,15 @@ const formatTime = (value: string) => {
           <p class="m-0 text-[13px] font-bold uppercase tracking-normal text-muted">
             Project Manager
           </p>
-          <h2 class="m-0 font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+          <h2 class="m-0 font-display text-[40px] font-normal leading-none max-[520px]:text-[32px]">
             项目管理
           </h2>
         </div>
         <div class="flex flex-wrap gap-(--space-1)">
+          <AppButton variant="outline" :disabled="props.saving || props.inspecting" @click="emit('exportBackup')">
+            <Icon name="lucide:database-backup" mode="svg" class="h-4 w-4" aria-hidden="true" />
+            备份
+          </AppButton>
           <AppButton
             variant="outline"
             :loading="props.inspecting"
@@ -185,19 +190,19 @@ const formatTime = (value: string) => {
       <div class="grid grid-cols-4 border-y border-line max-[920px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="项目统计">
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[520px]:border-r-0 max-[520px]:border-b" @click="projectVisibilityFilter = 'all'; projectFeaturedFilter = 'all'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">全部</span>
-          <span class="font-display text-[44px] leading-none text-ink">{{ props.projectStats.total }}</span>
+          <span class="font-display text-[36px] leading-none text-ink">{{ props.projectStats.total }}</span>
         </button>
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[920px]:border-r-0 max-[920px]:border-b" @click="projectVisibilityFilter = 'visible'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">公开</span>
-          <span class="font-display text-[44px] leading-none text-callout-success-text">{{ props.projectStats.visible }}</span>
+          <span class="font-display text-[36px] leading-none text-callout-success-text">{{ props.projectStats.visible }}</span>
         </button>
         <button type="button" class="grid gap-1 border-r border-line p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none max-[520px]:border-r-0 max-[520px]:border-b" @click="projectFeaturedFilter = 'featured'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">精选</span>
-          <span class="font-display text-[44px] leading-none text-ink">{{ props.projectStats.featured }}</span>
+          <span class="font-display text-[36px] leading-none text-ink">{{ props.projectStats.featured }}</span>
         </button>
         <button type="button" class="grid gap-1 p-(--space-2) text-left transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none" @click="projectVisibilityFilter = 'hidden'">
           <span class="text-[12px] font-bold uppercase tracking-normal text-muted">隐藏</span>
-          <span class="font-display text-[44px] leading-none text-muted">{{ props.projectStats.hidden }}</span>
+          <span class="font-display text-[36px] leading-none text-muted">{{ props.projectStats.hidden }}</span>
         </button>
       </div>
 
@@ -255,13 +260,13 @@ const formatTime = (value: string) => {
           type="button"
           class="relative grid gap-1 border-b border-line bg-transparent px-(--space-2) py-(--space-2) text-left text-ink transition-colors duration-200 hover:bg-code-surface focus-visible:bg-code-surface focus-visible:outline-none"
           :class="[
-            project.id === props.selectedProjectId ? 'bg-code-surface pl-(--space-3) before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-ink' : '',
+            project.id === props.selectedProjectId ? 'bg-ink! text-paper! hover:bg-ink! hover:text-paper! focus-visible:bg-ink! focus-visible:text-paper!' : '',
             !isCurrentFiltered(project) ? 'opacity-45' : ''
           ]"
           @click="emit('selectProject', project)"
         >
           <span class="truncate text-sm font-bold">{{ project.name }}</span>
-          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="project.id === props.selectedProjectId ? 'text-ink' : ''">
+          <span class="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted" :class="project.id === props.selectedProjectId ? 'text-paper!' : ''">
             <span class="truncate">{{ project.featured ? '精选' : '普通' }} / {{ project.hidden ? '隐藏' : '公开' }} / #{{ project.order }}</span>
             <span class="border px-1 py-0.5 text-[11px] font-bold leading-none" :class="checkStatusClass(project.checkStatus)">
               {{ checkStatusLabel(project.checkStatus) }}
@@ -354,7 +359,7 @@ const formatTime = (value: string) => {
               {{ projectStatus }} / {{ projectCategory }} / #{{ projectOrder }}
             </span>
           </div>
-          <h3 class="m-0 break-words font-display text-[56px] font-normal leading-none max-[520px]:text-[40px]">
+          <h3 class="m-0 break-words font-display text-[40px] font-normal leading-none max-[520px]:text-[32px]">
             {{ projectName || 'Untitled Project' }}
           </h3>
           <p class="m-0 max-w-190 text-lg leading-[1.55] text-muted text-pretty">
@@ -385,7 +390,7 @@ const formatTime = (value: string) => {
             </span>
             <span>{{ project.featured ? '精选' : '普通' }} / {{ project.status }} / {{ project.category }} / #{{ project.order }}</span>
           </p>
-          <h3 class="m-0 break-words font-display text-[48px] font-normal leading-none max-[520px]:text-[36px]">
+          <h3 class="m-0 break-words font-display text-[32px] font-normal leading-none max-[520px]:text-[28px]">
             {{ project.name }}
           </h3>
           <p class="m-0 max-w-190 text-lg leading-[1.55] text-muted text-pretty">

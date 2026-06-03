@@ -39,13 +39,13 @@ watch(
     >
       <div
         v-if="props.open"
-        class="fixed inset-0 z-[60] grid place-items-center bg-ink/55 p-(--space-3) backdrop-blur-[1px]"
+        class="fixed inset-0 z-[60] grid place-items-center bg-ink/55 p-(--space-3)"
         role="presentation"
         @click.self="emit('cancel')"
       >
         <section
           ref="dialogRef"
-          class="dialog-panel grid w-full max-w-150 gap-(--space-3) border border-line bg-paper p-(--space-3) text-ink shadow-[12px_12px_0_var(--line)] outline-none"
+          class="dialog-panel grid w-full max-w-150 gap-(--space-3) border border-line bg-paper p-(--space-3) text-ink outline-none"
           role="dialog"
           aria-modal="true"
           aria-labelledby="admin-confirm-title"

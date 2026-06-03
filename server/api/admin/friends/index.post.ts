@@ -50,17 +50,33 @@ export default defineEventHandler(async (event) => {
     backlinkCheckedAt: shouldResetInspection ? '' : existing.backlinkCheckedAt
   }
   const nextFriends = [friend, ...friends.filter((item) => item.id !== friend.id)]
+  const audit = createAdminAuditTrail(existing, friend, [
+    { key: 'name', label: '名称' },
+    { key: 'url', label: '链接' },
+    { key: 'icon', label: '图标' },
+    { key: 'intro', label: '简介' },
+    { key: 'description', label: '描述' },
+    { key: 'category', label: '分类' },
+    { key: 'status', label: '审核状态' },
+    { key: 'tags', label: '标签' },
+    { key: 'contact', label: '联系方式' },
+    { key: 'backlinkUrl', label: '反链地址' },
+    { key: 'reviewNote', label: '审核备注' },
+    { key: 'featured', label: '精选' },
+    { key: 'order', label: '排序' },
+    { key: 'checkStatus', label: '巡检状态' }
+  ])
 
   await writeFriends(nextFriends)
   await writeAdminLog({
     action: friends.some((item) => item.id === friend.id) ? 'friend.update' : 'friend.create',
     targetType: 'friend',
     targetId: friend.id,
-    message: `保存友链：${friend.name}`,
-    payload: {
+    message: appendAuditSummary(`保存友链：${friend.name}`, audit),
+    payload: withAuditPayload({
       url: friend.url,
       status: friend.status
-    }
+    }, audit)
   }).catch(() => {})
 
   return friend

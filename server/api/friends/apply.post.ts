@@ -156,6 +156,20 @@ export default defineEventHandler(async (event) => {
       contact: friend.contact
     }
   }).catch(() => {})
+  await createAdminNotificationEvent(event, {
+    source: 'friend.apply',
+    title: `新的友链申请：${friend.name}`,
+    body: `${friend.name} 提交了友链申请，站点地址：${friend.url}`,
+    level: 'warning',
+    href: 'admin:friends',
+    hrefLabel: '处理友链',
+    targetId: friend.id,
+    payload: {
+      url: friend.url,
+      category: friend.category,
+      contact: friend.contact
+    }
+  }).catch(() => {})
 
   return friend
 })
