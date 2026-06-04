@@ -7,6 +7,14 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   app: {
     head: {
+      link: [
+        {
+          rel: 'icon',
+          type: 'image/svg+xml',
+          sizes: 'any',
+          href: '/favicon.svg?v=20260603'
+        },
+      ],
       script: [
         {
           id: 'theme-init',

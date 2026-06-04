@@ -41,6 +41,11 @@ const foldLabel = computed(() => {
   return '折叠代码'
 })
 const foldIcon = computed(() => (isFolded.value ? 'lucide:chevrons-down' : 'lucide:chevrons-up'))
+const codeFrameClass = computed(() => (
+  isFolded.value
+    ? 'max-h-[32rem] overflow-hidden'
+    : 'max-h-[min(72vh,52rem)] overflow-auto'
+))
 
 const preClass = computed(() => [
   props.class,
@@ -114,7 +119,7 @@ onBeforeUnmount(() => {
       <div
         :id="codeBlockId"
         class="relative grid grid-cols-[auto_minmax(0,1fr)] bg-code-surface transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
-        :class="isFolded ? 'max-h-[32rem] overflow-hidden' : ''"
+        :class="codeFrameClass"
       >
         <div
           class="select-none border-r border-code-border px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"
@@ -163,7 +168,7 @@ onBeforeUnmount(() => {
     <div
       :id="codeBlockId"
       class="relative grid grid-cols-[auto_minmax(0,1fr)] transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
-      :class="isFolded ? 'max-h-[32rem] overflow-hidden' : ''"
+      :class="codeFrameClass"
     >
       <div
         class="select-none border-r border-code-border px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"

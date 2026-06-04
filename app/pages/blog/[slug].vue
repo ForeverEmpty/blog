@@ -3,9 +3,11 @@ const appConfig = useAppConfig();
 const route = useRoute();
 const slug = computed(() => String(route.params.slug));
 const articlePath = computed(() => `/blog/${slug.value}`);
+const articleDataKey = computed(() => `blog-article-detail:${articlePath.value}`);
+const articleViewsDataKey = computed(() => `blog-article-views:${slug.value}`);
 
 const { data: article, pending: articlePending, error: articleError } = await useAsyncData(
-  "blog-article-detail",
+  articleDataKey,
   () => queryCollection("blog").path(articlePath.value).first(),
   {
     default: () => null,
@@ -28,7 +30,7 @@ const articleEmptyDescription = computed(() => (
 ));
 
 const { data: articleViewStats } = await useAsyncData(
-  "blog-article-views",
+  articleViewsDataKey,
   () => (
     hasArticle.value
       ? $fetch<{ slug: string; views: number }>(`/api/blog/${encodeURIComponent(slug.value)}/views`)
@@ -489,10 +491,11 @@ onBeforeUnmount(() => {
 
     <article
       v-else
-      class="grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)_minmax(200px,280px)] border-b border-line bg-paper max-[1000px]:grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] max-[760px]:grid-cols-1"
+      class="article-shell grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)_minmax(200px,280px)] border-b border-line bg-paper max-[1000px]:grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] max-[760px]:grid-cols-1"
       aria-labelledby="article-title"
     >
       <ArticleMetaRail
+        class="article-meta-rail"
         :date="article.date"
         :author="article.author"
         :author-url="article.authorUrl"
@@ -503,10 +506,10 @@ onBeforeUnmount(() => {
         :views="articleViews"
       />
 
-      <div class="px-[clamp(var(--space-3),6vw,var(--space-12))] py-(--space-8) max-[760px]:px-(--space-2) max-[760px]:py-(--space-6)">
-        <div class="grid max-w-300 gap-(--space-8)">
+      <div class="article-main px-[clamp(var(--space-3),6vw,var(--space-12))] py-(--space-8) max-[760px]:px-(--space-2) max-[760px]:py-(--space-6)">
+        <div class="article-inner grid max-w-300 gap-(--space-8)">
           <header class="grid gap-(--space-3)">
-            <div class="flex flex-wrap items-center gap-(--space-1)">
+            <div class="article-side-actions flex flex-wrap items-center gap-(--space-1)">
               <NuxtLink
                 class="inline-flex min-h-11 w-fit items-center rounded-token px-(--space-2) text-sm font-bold tracking-normal text-muted! transition-colors duration-200 hover:bg-ink hover:text-paper! focus-visible:bg-ink focus-visible:text-paper! focus-visible:outline-none"
                 href="/blog"
@@ -559,21 +562,21 @@ onBeforeUnmount(() => {
           </header>
 
           <template v-if="!isArticleLocked">
-            <ArticleAiSummary :slug="slug" />
+            <ArticleAiSummary class="article-ai-summary" :slug="slug" />
 
             <ContentBody :value="articleRenderValue" />
 
-            <ArticleComments :slug="slug" />
+            <ArticleComments class="article-comments" :slug="slug" />
           </template>
 
           <nav
-            class="grid max-w-190 grid-cols-2 border-y border-line"
+            class="article-adjacent-nav grid max-w-190 grid-cols-2 border-y border-line"
             aria-label="相邻文章"
           >
             <NuxtLink
               v-if="previousArticle"
               class="group grid min-h-36 content-between gap-(--space-2) border-r border-line p-(--space-3) text-ink transition-[background-color,color] duration-240 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none max-[680px]:min-h-30 max-[680px]:p-(--space-2)"
-              :href="previousArticle.path"
+              :to="previousArticle.path"
             >
               <span class="flex items-center gap-(--space-1) text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">
                 <Icon
@@ -615,7 +618,7 @@ onBeforeUnmount(() => {
             <NuxtLink
               v-if="nextArticle"
               class="group grid min-h-36 content-between justify-items-end gap-(--space-2) p-(--space-3) text-right text-ink transition-[background-color,color] duration-240 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none max-[680px]:min-h-30 max-[680px]:p-(--space-2)"
-              :href="nextArticle.path"
+              :to="nextArticle.path"
             >
               <span class="flex items-center gap-(--space-1) text-[13px] font-bold uppercase tracking-normal text-muted transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">
                 下一篇
@@ -659,7 +662,7 @@ onBeforeUnmount(() => {
 
       <ContentTableOfContents
         v-if="!isArticleLocked"
-        class="mr-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-8) max-[1000px]:col-start-2 max-[1000px]:mr-0 max-[1000px]:px-[clamp(var(--space-3),6vw,var(--space-12))] max-[1000px]:pt-0 max-[760px]:col-start-auto max-[760px]:px-(--space-2)"
+        class="article-toc mr-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-8) max-[1000px]:col-start-2 max-[1000px]:mr-0 max-[1000px]:px-[clamp(var(--space-3),6vw,var(--space-12))] max-[1000px]:pt-0 max-[760px]:col-start-auto max-[760px]:px-(--space-2)"
         :links="tocLinks"
         label="文章目录"
       />

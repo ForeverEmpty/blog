@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">ChankoBlog icon</title>
+  <desc id="desc">A paper-like square mark with an ink monogram for ChankoBlog.</desc>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    .paper {
+      fill: #faf9f3;
+    }
+
+    .surface {
+      fill: #f3f1e9;
+    }
+
+    .ink {
+      fill: #28251f;
+    }
+
+    .line {
+      stroke: #d8d4c8;
+    }
+
+    .ink-line {
+      stroke: #28251f;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .paper {
+        fill: #24211c;
+      }
+
+      .surface {
+        fill: #302c25;
+      }
+
+      .ink {
+        fill: #f4f0e6;
+      }
+
+      .line {
+        stroke: #4b463c;
+      }
+
+      .ink-line {
+        stroke: #f4f0e6;
+      }
+    }
+  </style>
+  <rect width="512" height="512" class="paper" />
+  <path class="line" d="M128 0v512M256 0v512M384 0v512M0 128h512M0 256h512M0 384h512" stroke-width="1.5" opacity=".55" />
+  <rect x="54" y="54" width="354" height="354" class="surface" stroke="#28251f" stroke-width="18" />
+  <path class="paper" d="M408 54v122h122z" transform="translate(-84 0)" opacity=".96" />
+  <path class="ink" d="M337 78h72v72z" opacity=".95" />
+  <path class="ink-line" d="M339 78 409 148" stroke-width="14" stroke-linecap="square" />
+  <path
+    class="ink"
+    fill-rule="evenodd"
+    d="M256 138c-68 0-118 52-118 118s50 118 118 118c35 0 67-14 90-37l-36-39c-14 14-33 22-54 22-38 0-66-29-66-64s28-64 66-64c21 0 40 8 54 22l36-39c-23-23-55-37-90-37z"
+  />
+  <path
+    class="ink"
+    d="M292 156h44c50 0 80 25 80 67 0 22-9 39-27 51 23 11 37 31 37 59 0 47-34 75-90 75h-44v-52h43c24 0 38-11 38-30 0-18-14-28-39-28h-42v-48h36c22 0 34-10 34-27 0-16-13-25-36-25h-34z"
+    opacity=".96"
+  />
+  <rect x="104" y="430" width="304" height="18" class="ink" />
+</svg>

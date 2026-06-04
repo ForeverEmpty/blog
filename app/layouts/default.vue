@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import SiteNotifications from '~/components/SiteNotifications.vue'
-
 type LayoutSearchProject = {
   id?: string
   name: string
@@ -57,7 +55,7 @@ const { data: siteNotifications } = await useAsyncData('site-notifications', () 
 <template>
   <main class="min-h-screen overflow-x-clip bg-paper bg-[linear-gradient(90deg,var(--line)_1px,transparent_1px)] bg-size-[96px_96px]">
     <header
-      class="sticky top-0 z-10 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-(--space-4) border-b border-[color-mix(in_oklch,var(--line),transparent_24%)] bg-paper px-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-3) max-[760px]:grid-cols-[auto_minmax(0,1fr)] max-[760px]:gap-x-(--space-2) max-[760px]:gap-y-(--space-1) max-[760px]:p-(--space-2)"
+      class="site-header sticky top-0 z-10 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-(--space-4) border-b border-[color-mix(in_oklch,var(--line),transparent_24%)] bg-paper px-[clamp(var(--space-3),5vw,var(--space-8))] py-(--space-3) transition-[opacity,transform] duration-300 max-[760px]:grid-cols-[auto_minmax(0,1fr)] max-[760px]:gap-x-(--space-2) max-[760px]:gap-y-(--space-1) max-[760px]:p-(--space-2)"
       aria-label="站点导航"
     >
       <NuxtLink
@@ -88,18 +86,13 @@ const { data: siteNotifications } = await useAsyncData('site-notifications', () 
         >
           <Icon name="lucide:search" mode="svg" class="h-5 w-5" aria-hidden="true" />
         </AppButton>
-        <SiteNotifications
-          :items="siteNotifications"
-        />
         <ThemeModeToggle class="justify-self-end" />
-        <AppLinkButton
-          class="max-[760px]:min-h-10 max-[760px]:justify-self-end max-[760px]:px-(--space-1) max-[760px]:text-[13px]"
-          :href="appConfig.navigation.admin.href"
-          variant="outline"
-          :active="isActiveNavigation(appConfig.navigation.admin.href)"
-        >
-          {{ appConfig.navigation.admin.label }}
-        </AppLinkButton>
+        <SiteControlPanel
+          :notifications="siteNotifications"
+          :admin-href="appConfig.navigation.admin.href"
+          :admin-label="appConfig.navigation.admin.label"
+          :admin-active="isActiveNavigation(appConfig.navigation.admin.href)"
+        />
       </div>
     </header>
 
@@ -112,6 +105,6 @@ const { data: siteNotifications } = await useAsyncData('site-notifications', () 
 
     <slot />
 
-    <SiteFooter />
+    <SiteFooter class="site-footer" />
   </main>
 </template>

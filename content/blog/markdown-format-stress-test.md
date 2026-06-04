@@ -470,13 +470,13 @@ const useCanvasWordmarkMotion = ({
 
 ## 视频与富媒体卡片
 
-::content-video{src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" poster="/favicon.ico" title="视频组件示例" description="视频组件用于在文章中嵌入可控的视频内容，默认显示控制栏并使用 metadata 预加载。"}
+::content-video{src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" poster="/favicon.svg" title="视频组件示例" description="视频组件用于在文章中嵌入可控的视频内容，默认显示控制栏并使用 metadata 预加载。"}
 ::
 
-::sensitive-image{src="/favicon.ico" alt="ChankoBlog favicon" title="敏感图片示例" sensitive="这张图片需要读者主动确认后再显示。" description="点击显示前不会渲染真实图片。"}
+::sensitive-image{src="/favicon.svg" alt="ChankoBlog favicon" title="敏感图片示例" sensitive="这张图片需要读者主动确认后再显示。" description="点击显示前不会渲染真实图片。"}
 ::
 
-::link-card{href="/about" image="/favicon.ico" title="关于 ChankoBlog" description="链接卡片可以展示图片或图标、标题、简介和跳转地址。" label="Internal Link"}
+::link-card{href="/about" image="/favicon.svg" title="关于 ChankoBlog" description="链接卡片可以展示图片或图标、标题、简介和跳转地址。" label="Internal Link"}
 ::
 
 ## 文档提示块

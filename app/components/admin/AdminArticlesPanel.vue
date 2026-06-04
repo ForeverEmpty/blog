@@ -62,6 +62,32 @@ type MarkdownTemplate = {
   block?: boolean
 }
 
+type MarkdownTemplateGroup = {
+  group: string
+  templates: MarkdownTemplate[]
+}
+
+type MarkdownToolbarAction = {
+  label: string
+  icon?: string
+  run: () => void | Promise<void>
+}
+
+type MarkdownToolbarMenu = {
+  label: string
+  icon?: string
+  actions: MarkdownToolbarAction[]
+}
+
+type MarkdownToolbarItem = MarkdownToolbarAction | MarkdownToolbarMenu
+
+type MarkdownEditHistoryEntry = {
+  before: string
+  after: string
+  selectionBefore: [number, number]
+  selectionAfter: [number, number]
+}
+
 const appConfig = useAppConfig() as unknown as {
   admin?: {
     markdownTemplates?: unknown
@@ -70,6 +96,15 @@ const appConfig = useAppConfig() as unknown as {
 const customMarkdownTemplatesStorageKey = 'chankoblog-admin-markdown-templates'
 const markdownTemplateConfigOpen = ref(false)
 const customMarkdownTemplatesSource = ref('')
+const customMarkdownTemplateForm = reactive({
+  group: '常用块',
+  label: '',
+  icon: '',
+  placeholder: '',
+  content: '',
+  block: true
+})
+const customMarkdownTemplateFormError = ref('')
 
 const editorPreviewGrid = ref<HTMLElement | null>(null)
 const markdownTextarea = ref<HTMLTextAreaElement | null>(null)
@@ -77,10 +112,13 @@ const previewScroller = ref<HTMLElement | null>(null)
 const editorPreviewSplit = ref(68)
 const resizingEditorPreview = ref(false)
 const publishChecksCollapsed = ref(false)
+const markdownEditHistory = ref<MarkdownEditHistoryEntry[]>([])
 const articleStatusNow = ref(Date.now())
 let articleStatusTimer: ReturnType<typeof setInterval> | undefined
 const editorPreviewGridStyle = computed(() => ({
-  '--editor-preview-split': `${editorPreviewSplit.value}%`
+  '--editor-preview-split': `${editorPreviewSplit.value}%`,
+  '--editor-group-height': 'min(880px, calc(100vh - 128px))',
+  '--editor-panel-height': 'min(430px, calc((100vh - 160px) / 2))'
 }))
 const markdownPreviewBlocks = computed(() => parseMarkdownPreviewBlocks(draftMarkdown.value))
 const isScheduledArticleReady = (article: Pick<ManagedArticle, 'scheduledAt'>) => {
@@ -183,6 +221,25 @@ const normalizeMarkdownTemplate = (value: unknown): MarkdownTemplate | null => {
   }
 }
 
+const normalizeMarkdownTemplateGroup = (value: unknown, fallbackGroup = '模板'): MarkdownTemplateGroup | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const group = value as Record<string, unknown>
+  const label = typeof group.group === 'string' && group.group.trim() ? group.group.trim() : fallbackGroup
+  const templates = parseMarkdownTemplates(group.templates)
+
+  if (templates.length === 0) {
+    return null
+  }
+
+  return {
+    group: label,
+    templates
+  }
+}
+
 const parseMarkdownTemplates = (source: unknown): MarkdownTemplate[] => {
   if (!Array.isArray(source)) {
     return []
@@ -193,13 +250,40 @@ const parseMarkdownTemplates = (source: unknown): MarkdownTemplate[] => {
     .filter((template): template is MarkdownTemplate => Boolean(template))
 }
 
-const appMarkdownTemplates = computed(() => parseMarkdownTemplates(appConfig.admin?.markdownTemplates))
+const parseMarkdownTemplateGroups = (source: unknown, fallbackGroup = '模板'): MarkdownTemplateGroup[] => {
+  if (!Array.isArray(source)) {
+    return []
+  }
+
+  const directTemplates = parseMarkdownTemplates(source)
+
+  if (directTemplates.length > 0) {
+    return [
+      {
+        group: fallbackGroup,
+        templates: directTemplates
+      }
+    ]
+  }
+
+  return source
+    .map((group) => normalizeMarkdownTemplateGroup(group, fallbackGroup))
+    .filter((group): group is MarkdownTemplateGroup => Boolean(group))
+}
+
+const flattenMarkdownTemplateGroups = (groups: MarkdownTemplateGroup[]) => (
+  groups.flatMap((group) => group.templates)
+)
+
+const appMarkdownTemplateGroups = computed(() => parseMarkdownTemplateGroups(appConfig.admin?.markdownTemplates, '内置模板'))
+const appMarkdownTemplates = computed(() => flattenMarkdownTemplateGroups(appMarkdownTemplateGroups.value))
 
 const customMarkdownTemplatesResult = computed(() => {
   const source = customMarkdownTemplatesSource.value.trim()
 
   if (!source) {
     return {
+      groups: [] as MarkdownTemplateGroup[],
       templates: [] as MarkdownTemplate[],
       error: ''
     }
@@ -210,34 +294,44 @@ const customMarkdownTemplatesResult = computed(() => {
 
     if (!Array.isArray(parsed)) {
       return {
+        groups: [] as MarkdownTemplateGroup[],
         templates: [] as MarkdownTemplate[],
-        error: '模板配置必须是 JSON 数组。'
+        error: '模板配置必须是 JSON 数组，可使用模板数组或分组数组。'
       }
     }
 
-    const templates = parseMarkdownTemplates(parsed)
+    const groups = parseMarkdownTemplateGroups(parsed, '自定义')
+    const templates = flattenMarkdownTemplateGroups(groups)
 
-    if (templates.length !== parsed.length) {
+    if (groups.length === 0) {
       return {
+        groups,
         templates,
-        error: '部分模板缺少 label 或 content，已忽略。'
+        error: '未找到有效模板，模板需要 label 和 content。'
       }
     }
 
     return {
+      groups,
       templates,
       error: ''
     }
   } catch {
     return {
+      groups: [] as MarkdownTemplateGroup[],
       templates: [] as MarkdownTemplate[],
       error: '模板 JSON 格式有误。'
     }
   }
 })
 
+const customMarkdownTemplateGroups = computed(() => customMarkdownTemplatesResult.value.groups)
 const customMarkdownTemplates = computed(() => customMarkdownTemplatesResult.value.templates)
 const customMarkdownTemplatesError = computed(() => customMarkdownTemplatesResult.value.error)
+const markdownTemplateGroups = computed(() => [
+  ...appMarkdownTemplateGroups.value,
+  ...customMarkdownTemplateGroups.value
+])
 const markdownTemplates = computed(() => [
   ...appMarkdownTemplates.value,
   ...customMarkdownTemplates.value
@@ -245,11 +339,35 @@ const markdownTemplates = computed(() => [
 
 const markdownTemplatesExample = computed(() => JSON.stringify([
   {
-    label: '摘要块',
-    icon: 'lucide:file-text',
-    content: '::normal\n{selection}\n::\n{cursor}',
-    placeholder: '摘要内容',
-    block: true
+    group: '常用块',
+    templates: [
+      {
+        label: '摘要块',
+        icon: 'lucide:file-text',
+        content: '::normal\n{selection}\n::\n{cursor}',
+        placeholder: '摘要内容',
+        block: true
+      },
+      {
+        label: '提示块',
+        icon: 'lucide:info',
+        content: '::tip\n{selection}\n::\n{cursor}',
+        placeholder: '提示内容',
+        block: true
+      }
+    ]
+  },
+  {
+    group: '媒体',
+    templates: [
+      {
+        label: '图片',
+        icon: 'lucide:image-plus',
+        content: '![{selection}](/media/image.png)\n{cursor}',
+        placeholder: '图片描述',
+        block: true
+      }
+    ]
   }
 ], null, 2))
 
@@ -277,19 +395,78 @@ const getPublishCheckClass = (check: ArticlePublishCheck) => {
   return 'border-line bg-paper text-muted'
 }
 
-const updateMarkdownSelection = async (value: string, selectionStart: number, selectionEnd = selectionStart) => {
-  draftMarkdown.value = value
-  await nextTick()
-
-  const textarea = markdownTextarea.value
-
-  if (!textarea) {
+const pushMarkdownEditHistory = (
+  before: string,
+  after: string,
+  selectionBefore: [number, number],
+  selectionAfter: [number, number]
+) => {
+  if (before === after) {
     return
   }
 
-  textarea.focus()
-  textarea.setSelectionRange(selectionStart, selectionEnd)
+  markdownEditHistory.value.push({
+    before,
+    after,
+    selectionBefore,
+    selectionAfter
+  })
+
+  if (markdownEditHistory.value.length > 50) {
+    markdownEditHistory.value.shift()
+  }
+}
+
+const updateMarkdownSelection = async (
+  value: string,
+  selectionStart: number,
+  selectionEnd = selectionStart,
+  trackUndo = true
+) => {
+  const textarea = markdownTextarea.value
+  const before = draftMarkdown.value
+  const selectionBefore: [number, number] = [
+    textarea?.selectionStart ?? before.length,
+    textarea?.selectionEnd ?? before.length
+  ]
+
+  if (trackUndo) {
+    pushMarkdownEditHistory(before, value, selectionBefore, [selectionStart, selectionEnd])
+  }
+
+  draftMarkdown.value = value
+  await nextTick()
+
+  const nextTextarea = markdownTextarea.value
+
+  if (!nextTextarea) {
+    return
+  }
+
+  nextTextarea.focus()
+  nextTextarea.setSelectionRange(selectionStart, selectionEnd)
   await syncPreviewAfterCursorMove()
+}
+
+const undoMarkdownProgrammaticEdit = async (event: KeyboardEvent) => {
+  if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') {
+    return
+  }
+
+  const entry = markdownEditHistory.value.at(-1)
+
+  if (!entry || draftMarkdown.value !== entry.after) {
+    return
+  }
+
+  event.preventDefault()
+  markdownEditHistory.value.pop()
+  await updateMarkdownSelection(
+    entry.before,
+    entry.selectionBefore[0],
+    entry.selectionBefore[1],
+    false
+  )
 }
 
 const insertInlineMarkdown = async (prefix: string, suffix: string, placeholder: string) => {
@@ -361,6 +538,147 @@ const insertMarkdownLinePrefix = async (prefix: string, placeholder: string, num
   )
 }
 
+const isMarkdownToolbarMenu = (item: MarkdownToolbarItem): item is MarkdownToolbarMenu => (
+  'actions' in item
+)
+
+const closeToolbarMenu = (event: MouseEvent) => {
+  const target = event.currentTarget
+
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  target.closest('details')?.removeAttribute('open')
+}
+
+const runMarkdownToolbarAction = async (action: MarkdownToolbarAction, event?: MouseEvent) => {
+  await action.run()
+
+  if (event) {
+    closeToolbarMenu(event)
+  }
+}
+
+const markdownToolbarGroups = computed((): Array<{ group: string, items: MarkdownToolbarItem[] }> => [
+  {
+    group: '标题',
+    items: [
+      {
+        label: '标题',
+        icon: 'lucide:heading',
+        actions: [
+          {
+            label: 'H1',
+            run: () => insertMarkdownLinePrefix('# ', '一级标题')
+          },
+          {
+            label: 'H2',
+            run: () => insertMarkdownLinePrefix('## ', '二级标题')
+          },
+          {
+            label: 'H3',
+            run: () => insertMarkdownLinePrefix('### ', '三级标题')
+          },
+          {
+            label: 'H4',
+            run: () => insertMarkdownLinePrefix('#### ', '四级标题')
+          },
+          {
+            label: 'H5',
+            run: () => insertMarkdownLinePrefix('##### ', '五级标题')
+          },
+          {
+            label: 'H6',
+            run: () => insertMarkdownLinePrefix('###### ', '六级标题')
+          }
+        ]
+      }
+    ]
+  },
+  {
+    group: '基础样式',
+    items: [
+      {
+        label: '粗体',
+        icon: 'lucide:bold',
+        run: () => insertInlineMarkdown('**', '**', '粗体文本')
+      },
+      {
+        label: '斜体',
+        icon: 'lucide:italic',
+        run: () => insertInlineMarkdown('*', '*', '斜体文本')
+      },
+      {
+        label: '删除线',
+        icon: 'lucide:strikethrough',
+        run: () => insertInlineMarkdown('~~', '~~', '删除线文本')
+      },
+      {
+        label: '行内代码',
+        icon: 'lucide:code',
+        run: () => insertInlineMarkdown('`', '`', 'code')
+      },
+      {
+        label: '链接',
+        icon: 'lucide:link',
+        run: () => insertInlineMarkdown('[', '](https://example.com)', '链接文本')
+      }
+    ]
+  },
+  {
+    group: '段落结构',
+    items: [
+      {
+        label: '代码块',
+        icon: 'lucide:square-code',
+        run: insertMarkdownCodeBlock
+      },
+      {
+        label: '分割线',
+        icon: 'lucide:minus',
+        run: () => insertBlockMarkdown('---', 3, 0)
+      },
+      {
+        label: '引用',
+        icon: 'lucide:quote',
+        run: () => insertMarkdownLinePrefix('> ', '引用内容')
+      },
+      {
+        label: '列表',
+        icon: 'lucide:list-ordered',
+        actions: [
+          {
+            label: '无序列表',
+            icon: 'lucide:list',
+            run: () => insertMarkdownLinePrefix('- ', '列表项')
+          },
+          {
+            label: '有序列表',
+            icon: 'lucide:list-ordered',
+            run: () => insertMarkdownLinePrefix('', '列表项', true)
+          },
+          {
+            label: '任务列表',
+            icon: 'lucide:list-checks',
+            run: () => insertMarkdownLinePrefix('- [ ] ', '任务项')
+          }
+        ]
+      }
+    ]
+  },
+  {
+    group: '媒体',
+    items: [
+      {
+        label: '图片',
+        icon: 'lucide:image',
+        run: () => insertInlineMarkdown('![', '](/media/image.png)', '图片描述')
+      }
+    ]
+  }
+])
+
 const insertMarkdownTemplate = async (template: MarkdownTemplate) => {
   const textarea = markdownTextarea.value
   const value = draftMarkdown.value
@@ -400,13 +718,90 @@ const insertMarkdownTemplate = async (template: MarkdownTemplate) => {
   )
 }
 
+const cloneCustomMarkdownTemplateGroups = () => (
+  customMarkdownTemplateGroups.value.map((group) => ({
+    group: group.group,
+    templates: group.templates.map((template) => ({ ...template }))
+  }))
+)
+
+const syncCustomMarkdownTemplateGroups = (groups: MarkdownTemplateGroup[]) => {
+  customMarkdownTemplatesSource.value = groups.length > 0 ? JSON.stringify(groups, null, 2) : ''
+}
+
+const resetCustomMarkdownTemplateForm = () => {
+  customMarkdownTemplateForm.label = ''
+  customMarkdownTemplateForm.icon = ''
+  customMarkdownTemplateForm.placeholder = ''
+  customMarkdownTemplateForm.content = ''
+  customMarkdownTemplateForm.block = true
+  customMarkdownTemplateFormError.value = ''
+}
+
+const addCustomMarkdownTemplate = () => {
+  const groupLabel = customMarkdownTemplateForm.group.trim() || '自定义'
+  const label = customMarkdownTemplateForm.label.trim()
+  const content = customMarkdownTemplateForm.content
+
+  if (!label || !content.trim()) {
+    customMarkdownTemplateFormError.value = '模板名称和内容不能为空。'
+    return
+  }
+
+  const groups = cloneCustomMarkdownTemplateGroups()
+  const targetGroup = groups.find((group) => group.group === groupLabel)
+  const template: MarkdownTemplate = {
+    label,
+    icon: customMarkdownTemplateForm.icon.trim() || undefined,
+    content,
+    placeholder: customMarkdownTemplateForm.placeholder.trim() || undefined,
+    block: customMarkdownTemplateForm.block
+  }
+
+  if (targetGroup) {
+    const existingIndex = targetGroup.templates.findIndex((item) => item.label === label)
+
+    if (existingIndex >= 0) {
+      targetGroup.templates.splice(existingIndex, 1, template)
+    } else {
+      targetGroup.templates.push(template)
+    }
+  } else {
+    groups.push({
+      group: groupLabel,
+      templates: [template]
+    })
+  }
+
+  syncCustomMarkdownTemplateGroups(groups)
+  resetCustomMarkdownTemplateForm()
+  customMarkdownTemplateForm.group = groupLabel
+}
+
+const removeCustomMarkdownTemplate = (groupIndex: number, templateIndex: number) => {
+  const groups = cloneCustomMarkdownTemplateGroups()
+  const group = groups[groupIndex]
+
+  if (!group) {
+    return
+  }
+
+  group.templates.splice(templateIndex, 1)
+
+  if (group.templates.length === 0) {
+    groups.splice(groupIndex, 1)
+  }
+
+  syncCustomMarkdownTemplateGroups(groups)
+}
+
 const saveCustomMarkdownTemplates = () => {
   if (!import.meta.client || customMarkdownTemplatesError.value) {
     return
   }
 
-  const templates = customMarkdownTemplates.value
-  const source = templates.length > 0 ? JSON.stringify(templates, null, 2) : ''
+  const groups = customMarkdownTemplateGroups.value
+  const source = groups.length > 0 ? JSON.stringify(groups, null, 2) : ''
   customMarkdownTemplatesSource.value = source
 
   if (source) {
@@ -521,6 +916,18 @@ const syncPreviewToMarkdownCursor = () => {
 const syncPreviewAfterCursorMove = async () => {
   await nextTick()
   syncPreviewToMarkdownCursor()
+}
+
+const scrollEditorIntoView = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  editorPreviewGrid.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+    inline: 'nearest'
+  })
 }
 
 const stopEditorPreviewResize = () => {
@@ -940,7 +1347,7 @@ onBeforeUnmount(() => {
 
       <div
         ref="editorPreviewGrid"
-        class="grid min-h-0 grid-cols-[minmax(0,var(--editor-preview-split))_10px_minmax(320px,1fr)] items-stretch gap-0 [--editor-panel-height:880px] min-[1181px]:h-[var(--editor-panel-height)] min-[1680px]:[--editor-panel-height:960px] max-[1180px]:grid-cols-1 max-[1180px]:[--editor-panel-height:560px] max-[720px]:[--editor-panel-height:420px]"
+        class="grid min-h-0 grid-cols-[minmax(0,var(--editor-preview-split))_10px_minmax(320px,1fr)] items-stretch gap-0 min-[1181px]:h-[var(--editor-group-height)] max-[1180px]:grid-cols-1"
         :class="resizingEditorPreview ? 'select-none' : ''"
         :style="editorPreviewGridStyle"
       >
@@ -954,119 +1361,88 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="grid gap-1 border-b border-line bg-paper px-(--space-2) py-1" aria-label="Markdown 快捷栏">
-            <div class="flex min-h-10 flex-wrap items-center gap-1">
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="二级标题"
-                aria-label="二级标题"
-                @click="insertMarkdownLinePrefix('## ', '二级标题')"
+            <div class="flex min-h-10 flex-wrap items-stretch gap-1">
+              <div
+                v-for="group in markdownToolbarGroups"
+                :key="`markdown-toolbar-group-${group.group}`"
+                class="flex min-h-9 flex-wrap items-center gap-1 border-r border-line pr-1 last:border-r-0 last:pr-0"
+                :aria-label="group.group"
               >
-                H2
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="三级标题"
-                aria-label="三级标题"
-                @click="insertMarkdownLinePrefix('### ', '三级标题')"
+                <template
+                  v-for="item in group.items"
+                  :key="`markdown-toolbar-item-${group.group}-${item.label}`"
+                >
+                  <details
+                    v-if="isMarkdownToolbarMenu(item)"
+                    class="group/menu relative"
+                  >
+                    <summary
+                      class="inline-flex h-9 min-w-9 cursor-pointer list-none items-center justify-center gap-1 border border-line bg-paper px-2 text-[13px] font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none [&::-webkit-details-marker]:hidden"
+                      :title="item.label"
+                      :aria-label="item.label"
+                    >
+                      <Icon v-if="item.icon" :name="item.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                      <span>{{ item.label }}</span>
+                      <Icon name="lucide:chevron-down" mode="svg" class="h-3.5 w-3.5 transition-transform group-open/menu:rotate-180" aria-hidden="true" />
+                    </summary>
+                    <div class="absolute left-0 top-[calc(100%+4px)] z-30 grid min-w-32 gap-1 border border-line bg-paper p-1 shadow-[4px_4px_0_var(--color-line)]">
+                      <button
+                        v-for="action in item.actions"
+                        :key="`markdown-toolbar-menu-action-${group.group}-${item.label}-${action.label}`"
+                        type="button"
+                        class="inline-flex h-9 items-center gap-2 border border-transparent px-2 text-left text-[13px] font-bold text-ink transition-colors hover:border-line hover:bg-code-surface focus-visible:border-line focus-visible:bg-code-surface focus-visible:outline-none"
+                        :title="action.label"
+                        :aria-label="action.label"
+                        @click="runMarkdownToolbarAction(action, $event)"
+                      >
+                        <Icon v-if="action.icon" :name="action.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                        <span>{{ action.label }}</span>
+                      </button>
+                    </div>
+                  </details>
+                  <button
+                    v-else
+                    type="button"
+                    class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
+                    :title="item.label"
+                    :aria-label="item.label"
+                    @click="item.run"
+                  >
+                    <Icon v-if="item.icon" :name="item.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                    <span v-else>{{ item.label }}</span>
+                  </button>
+                </template>
+              </div>
+              <details
+                v-for="(group, groupIndex) in markdownTemplateGroups"
+                :key="`markdown-template-group-${groupIndex}-${group.group}`"
+                class="group/menu relative flex min-h-9 flex-wrap items-center gap-1 border-r border-line pr-1 last:border-r-0 last:pr-0"
+                :aria-label="group.group"
               >
-                H3
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="粗体"
-                aria-label="粗体"
-                @click="insertInlineMarkdown('**', '**', '粗体文本')"
-              >
-                <Icon name="lucide:bold" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="斜体"
-                aria-label="斜体"
-                @click="insertInlineMarkdown('*', '*', '斜体文本')"
-              >
-                <Icon name="lucide:italic" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="行内代码"
-                aria-label="行内代码"
-                @click="insertInlineMarkdown('`', '`', 'code')"
-              >
-                <Icon name="lucide:code" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="代码块"
-                aria-label="代码块"
-                @click="insertMarkdownCodeBlock"
-              >
-                <Icon name="lucide:square-code" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="引用"
-                aria-label="引用"
-                @click="insertMarkdownLinePrefix('> ', '引用内容')"
-              >
-                <Icon name="lucide:quote" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="无序列表"
-                aria-label="无序列表"
-                @click="insertMarkdownLinePrefix('- ', '列表项')"
-              >
-                <Icon name="lucide:list" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="有序列表"
-                aria-label="有序列表"
-                @click="insertMarkdownLinePrefix('', '列表项', true)"
-              >
-                <Icon name="lucide:list-ordered" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="链接"
-                aria-label="链接"
-                @click="insertInlineMarkdown('[', '](https://example.com)', '链接文本')"
-              >
-                <Icon name="lucide:link" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="inline-grid h-9 min-w-9 place-items-center border border-line bg-paper px-2 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                title="图片"
-                aria-label="图片"
-                @click="insertInlineMarkdown('![', '](/media/image.png)', '图片描述')"
-              >
-                <Icon name="lucide:image" mode="svg" class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <span v-if="markdownTemplates.length > 0" class="mx-1 h-6 w-px bg-line" aria-hidden="true" />
-              <button
-                v-for="template in markdownTemplates"
-                :key="`markdown-template-${template.label}`"
-                type="button"
-                class="inline-flex h-9 min-w-9 items-center justify-center gap-1 border border-line bg-paper px-2 text-[13px] font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                :title="`插入模板：${template.label}`"
-                :aria-label="`插入模板：${template.label}`"
-                @click="insertMarkdownTemplate(template)"
-              >
-                <Icon v-if="template.icon" :name="template.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
-                <span>{{ template.label }}</span>
-              </button>
+                <summary
+                  class="inline-flex h-9 min-w-9 cursor-pointer list-none items-center justify-center gap-1 border border-line bg-paper px-2 text-[13px] font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none [&::-webkit-details-marker]:hidden"
+                  :title="`模板：${group.group}`"
+                  :aria-label="`模板：${group.group}`"
+                >
+                  <Icon name="lucide:blocks" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                  <span>{{ group.group }}</span>
+                  <Icon name="lucide:chevron-down" mode="svg" class="h-3.5 w-3.5 transition-transform group-open/menu:rotate-180" aria-hidden="true" />
+                </summary>
+                <div class="absolute left-0 top-[calc(100%+4px)] z-30 grid min-w-40 gap-1 border border-line bg-paper p-1 shadow-[4px_4px_0_var(--color-line)]">
+                  <button
+                    v-for="template in group.templates"
+                    :key="`markdown-template-${groupIndex}-${template.label}`"
+                    type="button"
+                    class="inline-flex h-9 items-center gap-2 border border-transparent px-2 text-left text-[13px] font-bold text-ink transition-colors hover:border-line hover:bg-code-surface focus-visible:border-line focus-visible:bg-code-surface focus-visible:outline-none"
+                    :title="`插入模板：${template.label}`"
+                    :aria-label="`插入模板：${template.label}`"
+                    @click="insertMarkdownTemplate(template); closeToolbarMenu($event)"
+                  >
+                    <Icon v-if="template.icon" :name="template.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                    <span>{{ template.label }}</span>
+                  </button>
+                </div>
+              </details>
               <button
                 type="button"
                 class="inline-flex h-9 min-w-9 items-center justify-center gap-1 border border-line bg-code-surface px-2 text-[13px] font-bold text-ink transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
@@ -1084,16 +1460,117 @@ onBeforeUnmount(() => {
               id="markdown-template-config"
               class="grid gap-2 border-t border-line pt-2"
             >
-              <textarea
-                v-model="customMarkdownTemplatesSource"
-                class="min-h-36 resize-y border border-line bg-code-surface p-(--space-2) font-mono text-[13px] leading-[1.6] text-code-text outline-none focus:border-ink"
-                spellcheck="false"
-                :placeholder="markdownTemplatesExample"
-                aria-label="自定义 Markdown 模板 JSON"
-              />
+              <div class="grid gap-2 border border-line bg-code-surface p-(--space-2)">
+                <div class="grid grid-cols-[minmax(120px,0.7fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)] gap-2 max-[920px]:grid-cols-2 max-[560px]:grid-cols-1">
+                  <label class="grid gap-1 text-[12px] font-bold text-muted">
+                    分组
+                    <input
+                      v-model="customMarkdownTemplateForm.group"
+                      list="custom-markdown-template-groups"
+                      class="min-h-10 border border-line bg-paper px-2 text-sm text-ink outline-none focus:border-ink"
+                      type="text"
+                    >
+                  </label>
+                  <label class="grid gap-1 text-[12px] font-bold text-muted">
+                    名称
+                    <input
+                      v-model="customMarkdownTemplateForm.label"
+                      class="min-h-10 border border-line bg-paper px-2 text-sm text-ink outline-none focus:border-ink"
+                      type="text"
+                      placeholder="提示块"
+                    >
+                  </label>
+                  <label class="grid gap-1 text-[12px] font-bold text-muted">
+                    图标
+                    <input
+                      v-model="customMarkdownTemplateForm.icon"
+                      class="min-h-10 border border-line bg-paper px-2 text-sm text-ink outline-none focus:border-ink"
+                      type="text"
+                      placeholder="lucide:info"
+                    >
+                  </label>
+                  <label class="grid gap-1 text-[12px] font-bold text-muted">
+                    占位文本
+                    <input
+                      v-model="customMarkdownTemplateForm.placeholder"
+                      class="min-h-10 border border-line bg-paper px-2 text-sm text-ink outline-none focus:border-ink"
+                      type="text"
+                      placeholder="未选中文本时使用"
+                    >
+                  </label>
+                </div>
+                <label class="grid gap-1 text-[12px] font-bold text-muted">
+                  模板内容
+                  <textarea
+                    v-model="customMarkdownTemplateForm.content"
+                    class="min-h-28 resize-y border border-line bg-paper p-2 font-mono text-[13px] leading-[1.6] text-code-text outline-none focus:border-ink"
+                    spellcheck="false"
+                    placeholder="::tip&#10;{selection}&#10;::&#10;{cursor}"
+                  />
+                </label>
+                <datalist id="custom-markdown-template-groups">
+                  <option
+                    v-for="group in customMarkdownTemplateGroups"
+                    :key="`custom-markdown-template-group-option-${group.group}`"
+                    :value="group.group"
+                  />
+                </datalist>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <label class="inline-flex min-h-9 items-center gap-2 text-[13px] font-bold text-muted">
+                    <input
+                      v-model="customMarkdownTemplateForm.block"
+                      class="h-4 w-4 accent-current"
+                      type="checkbox"
+                    >
+                    块级插入
+                  </label>
+                  <p v-if="customMarkdownTemplateFormError" class="m-0 text-[13px] font-bold text-ink">
+                    {{ customMarkdownTemplateFormError }}
+                  </p>
+                  <div class="flex flex-wrap gap-1">
+                    <AppButton size="sm" variant="text" @click="resetCustomMarkdownTemplateForm">
+                      <Icon name="lucide:eraser" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                      重置表单
+                    </AppButton>
+                    <AppButton size="sm" @click="addCustomMarkdownTemplate">
+                      <Icon name="lucide:plus" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                      添加模板
+                    </AppButton>
+                  </div>
+                </div>
+              </div>
+              <div v-if="customMarkdownTemplateGroups.length > 0" class="grid gap-1">
+                <div
+                  v-for="(group, groupIndex) in customMarkdownTemplateGroups"
+                  :key="`custom-markdown-template-list-group-${groupIndex}-${group.group}`"
+                  class="grid gap-1 border border-line bg-paper p-2"
+                >
+                  <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
+                    {{ group.group }}
+                  </p>
+                  <div class="flex flex-wrap gap-1">
+                    <span
+                      v-for="(template, templateIndex) in group.templates"
+                      :key="`custom-markdown-template-list-item-${groupIndex}-${templateIndex}-${template.label}`"
+                      class="inline-flex min-h-9 items-center gap-1 border border-line bg-code-surface px-2 text-[13px] font-bold text-ink"
+                    >
+                      <Icon v-if="template.icon" :name="template.icon" mode="svg" class="h-4 w-4" aria-hidden="true" />
+                      {{ template.label }}
+                      <button
+                        type="button"
+                        class="ml-1 inline-grid h-6 w-6 place-items-center text-muted transition-colors hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
+                        :aria-label="`移除模板：${template.label}`"
+                        @click="removeCustomMarkdownTemplate(groupIndex, templateIndex)"
+                      >
+                        <Icon name="lucide:x" mode="svg" class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </span>
+                  </div>
+                </div>
+              </div>
               <div class="flex flex-wrap items-center justify-between gap-(--space-2)">
                 <p class="m-0 text-[13px] font-bold text-muted">
-                  app.config 默认 {{ appMarkdownTemplates.length }} 个 / 自定义 {{ customMarkdownTemplates.length }} 个
+                  app.config 默认 {{ appMarkdownTemplateGroups.length }} 组 / {{ appMarkdownTemplates.length }} 个，自定义 {{ customMarkdownTemplateGroups.length }} 组 / {{ customMarkdownTemplates.length }} 个
                 </p>
                 <p v-if="customMarkdownTemplatesError" class="m-0 text-[13px] font-bold text-ink">
                   {{ customMarkdownTemplatesError }}
@@ -1120,7 +1597,9 @@ onBeforeUnmount(() => {
             v-model="draftMarkdown"
             class="h-full min-h-0 resize-none overflow-auto overscroll-contain border-0 bg-code-surface p-(--space-3) font-mono text-[15px] leading-[1.75] text-code-text outline-none"
             spellcheck="false"
-            @click="syncPreviewAfterCursorMove"
+            @click="scrollEditorIntoView(); syncPreviewAfterCursorMove()"
+            @focus="scrollEditorIntoView"
+            @keydown="undoMarkdownProgrammaticEdit"
             @keyup="syncPreviewAfterCursorMove"
             @input="syncPreviewAfterCursorMove"
             @select="syncPreviewAfterCursorMove"

@@ -15,7 +15,7 @@ export default defineAppConfig({
     defaultTitle: 'ChankoBlog',
     titleTemplate: '%s - ChankoBlog',
     siteUrl: 'http://localhost:3000',
-    defaultImage: '/favicon.ico',
+    defaultImage: '/favicon.svg',
     feed: {
       rss: '/rss.xml',
       atom: '/atom.xml',
