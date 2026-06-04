@@ -16,12 +16,22 @@ const emit = defineEmits<{
 
 const sidebarCollapsed = ref(false)
 const { themeMode, themeOptions, setThemeMode } = useThemeMode()
+const fallbackThemeOption = {
+  mode: 'system' as const,
+  label: '系统',
+  title: '跟随系统主题',
+  icon: 'lucide:monitor'
+}
 const activeThemeOption = computed(() => (
-  themeOptions.find((option) => option.mode === themeMode.value) || themeOptions[0]
+  themeOptions.find((option) => option.mode === themeMode.value) || themeOptions[0] || fallbackThemeOption
 ))
 const cycleThemeMode = () => {
   const currentIndex = Math.max(0, themeOptions.findIndex((option) => option.mode === themeMode.value))
   const next = themeOptions[(currentIndex + 1) % themeOptions.length]
+
+  if (!next) {
+    return
+  }
 
   setThemeMode(next.mode)
 }

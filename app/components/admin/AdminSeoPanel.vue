@@ -337,7 +337,7 @@ const endpointIssues = computed(() => endpointChecks.value
     level: 'danger',
     scope: '公开端点',
     title: `${endpoint.label} 无法访问`,
-    detail: endpointErrors.value[endpoint.id],
+    detail: endpointErrors.value[endpoint.id] || '公开端点检查失败',
     href: endpoint.href
   })))
 

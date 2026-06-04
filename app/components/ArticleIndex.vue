@@ -11,7 +11,7 @@ defineProps<{
     category?: string
     locked?: boolean
     pinned?: boolean
-    tags: string[]
+    tags?: string[]
   }[]
 }>()
 
@@ -114,12 +114,12 @@ const tagFilterHref = (tag: string) => ({
               {{ article.description }}
             </p>
             <ul
-              v-if="article.tags.length > 0"
+              v-if="(article.tags || []).length > 0"
               class="m-0 flex list-none flex-wrap gap-(--space-1) p-0"
               aria-label="文章标签"
             >
               <li
-                v-for="tag in article.tags.slice(0, 3)"
+                v-for="tag in (article.tags || []).slice(0, 3)"
                 :key="tag"
                 class="relative z-2"
               >

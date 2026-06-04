@@ -114,7 +114,7 @@ const resizingEditorPreview = ref(false)
 const publishChecksCollapsed = ref(false)
 const markdownEditHistory = ref<MarkdownEditHistoryEntry[]>([])
 const articleStatusNow = ref(Date.now())
-let articleStatusTimer: ReturnType<typeof setInterval> | undefined
+let articleStatusTimer: number | undefined
 const editorPreviewGridStyle = computed(() => ({
   '--editor-preview-split': `${editorPreviewSplit.value}%`,
   '--editor-group-height': 'min(880px, calc(100vh - 128px))',
@@ -859,7 +859,9 @@ const getMarkdownBlockIndexAtLine = (line: number) => {
   }
 
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    if (blocks[index].startLine < line) {
+    const block = blocks[index]
+
+    if (block && block.startLine < line) {
       return index
     }
   }
@@ -905,6 +907,11 @@ const syncPreviewToMarkdownCursor = () => {
 
   const targetIndex = Math.min(markdownBlockIndex, previewBlocks.length - 1)
   const target = previewBlocks[targetIndex]
+
+  if (!target) {
+    return
+  }
+
   const previewRect = preview.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
   const maxPreviewScroll = Math.max(0, preview.scrollHeight - preview.clientHeight)

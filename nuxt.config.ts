@@ -66,11 +66,6 @@ export default defineNuxtConfig({
     robotsDisabledValue: 'noindex, nofollow',
     credits: false
   },
-  routeRules: {
-    '/admin': { robots: 'noindex, nofollow' },
-    '/admin/**': { robots: 'noindex, nofollow' },
-    '/api/admin/**': { robots: 'noindex, nofollow' }
-  },
   icon: {
     serverBundle: {
       collections: ['lucide']

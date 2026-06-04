@@ -61,7 +61,11 @@ const setActiveHeading = () => {
     }
   }
 
-  activeId.value = (topHeadingInDetectionArea ?? lastAboveDetectionArea ?? headings[0]).id
+  const activeHeading = topHeadingInDetectionArea ?? lastAboveDetectionArea ?? headings[0]
+
+  if (activeHeading) {
+    activeId.value = activeHeading.id
+  }
 }
 
 const requestActiveHeadingUpdate = () => {

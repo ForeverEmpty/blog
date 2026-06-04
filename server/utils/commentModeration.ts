@@ -94,7 +94,7 @@ export const getCommentModerationRules = (event?: H3Event): Required<CommentMode
     return runtimeRulesOverride
   }
 
-  const appConfig = event ? useAppConfig(event) : useAppConfig()
+  const appConfig = useAppConfig()
   const moderation = ((appConfig.comments as { moderation?: CommentModerationConfig } | undefined)?.moderation || {})
 
   return normalizeCommentModerationRules(moderation)

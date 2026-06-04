@@ -66,7 +66,14 @@ export const parseMarkdownPreviewBlocks = (markdown: string): MarkdownPreviewBlo
     const containerMatch = trimmed.match(/^(:{2,})\s*[\w-]+/)
 
     if (containerMatch) {
-      const fenceSize = containerMatch[1].length
+      const fence = containerMatch[1]
+
+      if (!fence) {
+        index += 1
+        continue
+      }
+
+      const fenceSize = fence.length
       index += 1
 
       while (index < lines.length && !new RegExp(`^\\s*:{${fenceSize},}\\s*$`).test(lines[index] || '')) {

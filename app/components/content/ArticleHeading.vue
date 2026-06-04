@@ -9,7 +9,7 @@ defineOptions({
 
 const attrs = useAttrs()
 
-const tag = computed(() => `h${props.level}`)
+const tag = computed(() => `h${props.level}` as const)
 const headingId = computed(() => {
   const id = attrs.id
 
@@ -18,7 +18,6 @@ const headingId = computed(() => {
 const href = computed(() => (headingId.value ? `#${headingId.value}` : undefined))
 const levelLabel = computed(() => `H${props.level}`)
 const headingClass = computed(() => [
-  attrs.class,
   'article-heading group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-(--space-2) rounded-token border border-transparent px-(--space-2) py-(--space-1) transition-[background-color,border-color,color,transform] duration-220 ease-[cubic-bezier(.16,1,.3,1)] hover:border-line hover:bg-code-surface focus-within:border-line focus-within:bg-code-surface',
   `article-heading--h${props.level}`
 ])
@@ -27,7 +26,8 @@ const headingClass = computed(() => [
 <template>
   <component
     :is="tag"
-    v-bind="{ ...attrs, class: headingClass }"
+    v-bind="attrs"
+    :class="headingClass"
   >
     <span class="article-heading__level mt-[0.18em] select-none font-mono text-[11px] font-bold leading-none tracking-normal text-quiet transition-colors duration-200 group-hover:text-muted group-focus-within:text-muted">
       {{ levelLabel }}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  value: unknown
+  value: Record<string, any>
 }>()
 </script>
 

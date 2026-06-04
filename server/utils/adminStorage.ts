@@ -298,24 +298,37 @@ export const parseArticleMarkdown = (raw: string, fallbackSlug: string): AdminAr
   const body = match ? raw.slice(match[0].length) : raw
 
   if (match) {
-    const lines = match[1].split(/\r?\n/)
+    const lines = (match[1] || '').split(/\r?\n/)
 
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index]
+
+      if (!line) {
+        continue
+      }
+
       const keyValue = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
 
       if (!keyValue) {
         continue
       }
 
-      const [, key, value] = keyValue
+      const [, key, value = ''] = keyValue
+
+      if (!key) {
+        continue
+      }
 
       if (value === '') {
         const list: string[] = []
 
         while (lines[index + 1]?.match(/^\s+-\s+/)) {
           index += 1
-          list.push(lines[index].replace(/^\s+-\s+/, '').trim().replace(/^["']|["']$/g, ''))
+          const listLine = lines[index]
+
+          if (listLine) {
+            list.push(listLine.replace(/^\s+-\s+/, '').trim().replace(/^["']|["']$/g, ''))
+          }
         }
 
         frontmatter[key] = list
@@ -407,7 +420,7 @@ export const parseAboutMarkdown = (raw: string): AdminAboutPage => {
   const body = match ? raw.slice(match[0].length) : raw
 
   if (match) {
-    const lines = match[1].split(/\r?\n/)
+    const lines = (match[1] || '').split(/\r?\n/)
 
     for (const line of lines) {
       const keyValue = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
@@ -416,7 +429,12 @@ export const parseAboutMarkdown = (raw: string): AdminAboutPage => {
         continue
       }
 
-      const [, key, value] = keyValue
+      const [, key, value = ''] = keyValue
+
+      if (!key) {
+        continue
+      }
+
       frontmatter[key] = parseScalar(value)
     }
   }
@@ -566,6 +584,8 @@ const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
 const writeJsonFile = async <T>(filePath: string, value: T) => {
   await ensureDataDir()
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+
+  return value
 }
 
 const normalizeProjectCheckStatus = (status: unknown): AdminProject['checkStatus'] => {

@@ -173,9 +173,10 @@ export const useThemeMode = () => {
       })
 
       transition.ready
-        .then(() => {
+        .then(async () => {
           if (currentTransitionId !== transitionId) {
-            return transition.finished
+            await transition.finished
+            return
           }
 
           const radius = getTransitionRadius(origin)
@@ -194,9 +195,11 @@ export const useThemeMode = () => {
             } as ViewTransitionAnimationOptions
           )
 
-          return Promise.allSettled([animation.finished, transition.finished])
+          await Promise.allSettled([animation.finished, transition.finished])
         })
-        .catch(() => transition.finished)
+        .catch(async () => {
+          await transition.finished
+        })
         .finally(() => finishTransition(currentTransitionId))
       return
     }

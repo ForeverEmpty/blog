@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 
 const getFriendInspectionOptions = (event: H3Event) => {
   const runtimeConfig = useRuntimeConfig(event)
-  const appConfig = useAppConfig(event)
+  const appConfig = useAppConfig()
 
   return {
     siteName: String(appConfig.site?.name || 'ChankoBlog'),

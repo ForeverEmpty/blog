@@ -213,13 +213,21 @@ const closePreview = () => {
 
 const showPreviousPreviewAsset = () => {
   if (hasPreviousPreviewAsset.value) {
-    previewAsset.value = sortedAssets.value[previewAssetIndex.value - 1]
+    const asset = sortedAssets.value[previewAssetIndex.value - 1]
+
+    if (asset) {
+      previewAsset.value = asset
+    }
   }
 }
 
 const showNextPreviewAsset = () => {
   if (hasNextPreviewAsset.value) {
-    previewAsset.value = sortedAssets.value[previewAssetIndex.value + 1]
+    const asset = sortedAssets.value[previewAssetIndex.value + 1]
+
+    if (asset) {
+      previewAsset.value = asset
+    }
   }
 }
 

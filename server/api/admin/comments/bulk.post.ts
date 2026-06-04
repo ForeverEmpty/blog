@@ -73,13 +73,14 @@ export default defineEventHandler(async (event) => {
 
   const comments = (await updateWalineCommentStatuses(ids, body.status as WalineCommentStatus))
     .map((comment) => withCommentModeration(comment, rules))
+  const nextStatus = body.status as WalineCommentStatus
   const audit = createAdminAuditTrail(
     {
       status: selectedComments.map((comment) => comment.status),
       count: selectedComments.length
     },
     {
-      status: body.status,
+      status: [nextStatus],
       count: comments.length
     },
     [
@@ -92,10 +93,10 @@ export default defineEventHandler(async (event) => {
     action: 'comment.bulk.status',
     targetType: 'comment',
     targetId: ids.join(','),
-    message: appendAuditSummary(`批量更新评论状态：${comments.length} 条 / ${body.status}`, audit),
+    message: appendAuditSummary(`批量更新评论状态：${comments.length} 条 / ${nextStatus}`, audit),
     payload: withAuditPayload({
       ids,
-      status: body.status,
+      status: nextStatus,
       updatedCount: comments.length
     }, audit)
   }).catch(() => {})

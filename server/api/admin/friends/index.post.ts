@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     description: typeof body.description === 'string' ? body.description.trim() : '',
     category: typeof body.category === 'string' && body.category.trim() ? body.category.trim() : '个人站点',
     status,
-    tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean) : [],
+    tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean) : [],
     contact: typeof body.contact === 'string' ? body.contact.trim() : '',
     backlinkUrl,
     reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote.trim() : '',

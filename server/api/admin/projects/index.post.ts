@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const tags = Array.isArray(body.tags)
-    ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean)
+    ? body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean)
     : []
   const projects = await readProjects()
   const existing = typeof body.id === 'string' && body.id

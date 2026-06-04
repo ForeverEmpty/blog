@@ -500,7 +500,9 @@ const getMarkdownBlockIndexAtLine = (line: number) => {
   }
 
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    if (blocks[index].startLine < line) {
+    const block = blocks[index]
+
+    if (block && block.startLine < line) {
       return index
     }
   }
@@ -546,6 +548,11 @@ const syncPreviewToMarkdownCursor = () => {
 
   const targetIndex = Math.min(markdownBlockIndex, previewBlocks.length - 1)
   const target = previewBlocks[targetIndex]
+
+  if (!target) {
+    return
+  }
+
   const previewRect = preview.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
   const maxPreviewScroll = Math.max(0, preview.scrollHeight - preview.clientHeight)

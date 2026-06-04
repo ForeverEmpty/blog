@@ -1,5 +1,6 @@
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ ids?: string[] }>(event).catch(() => ({}))
+  type InspectBody = { ids?: string[] }
+  const body = await readBody<InspectBody>(event).catch((): InspectBody => ({}))
   const requestedIds = Array.isArray(body?.ids)
     ? new Set(body.ids.map(String).filter(Boolean))
     : null

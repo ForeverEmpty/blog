@@ -20,7 +20,7 @@ const slots = useSlots()
 const activeIndex = ref(0)
 const copied = ref(false)
 const groupElement = ref<HTMLElement>()
-let copiedTimer: ReturnType<typeof window.setTimeout> | undefined
+let copiedTimer: number | undefined
 
 const RenderCodeFile = defineComponent({
   name: 'RenderCodeFile',

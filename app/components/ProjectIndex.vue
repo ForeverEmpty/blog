@@ -152,11 +152,6 @@ defineProps<{
         </div>
       </div>
 
-      <div class="mt-(--space-4) flex justify-end">
-        <AppLinkButton href="/projects" variant="outline">
-          查看全部项目
-        </AppLinkButton>
-      </div>
     </div>
   </section>
 </template>

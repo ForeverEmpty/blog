@@ -22,6 +22,16 @@ type AdminSessionPayload = {
 
 type InvalidAdminSessionReason = 'missing' | 'unconfigured' | 'malformed' | 'signature' | 'expired' | 'username'
 
+type AdminAuthStatus = {
+  authenticated: boolean
+  configured: boolean
+  username: string
+  csrfToken: string
+  expiresAt: string
+  secondsRemaining: number
+  invalidReason?: InvalidAdminSessionReason
+}
+
 const encodeBase64Url = (value: string) => Buffer.from(value, 'utf8').toString('base64url')
 
 const decodeBase64Url = (value: string) => Buffer.from(value, 'base64url').toString('utf8')
@@ -81,7 +91,7 @@ const createAdminSessionValue = (username: string) => {
   }
 }
 
-export const getAdminAuthStatus = (event: H3Event) => {
+export const getAdminAuthStatus = (event: H3Event): AdminAuthStatus => {
   const { username, sessionSecret, configured } = getAdminRuntimeConfig()
   const cookie = getCookie(event, adminSessionCookie)
   let invalidReason: InvalidAdminSessionReason | undefined
@@ -119,7 +129,7 @@ export const getAdminAuthStatus = (event: H3Event) => {
   }
 
   try {
-    const session = JSON.parse(decodeBase64Url(payload)) as AdminSessionPayload
+    const session = JSON.parse(decodeBase64Url(payload!)) as AdminSessionPayload
     const now = Math.floor(Date.now() / 1000)
 
     if (session.username !== username) {

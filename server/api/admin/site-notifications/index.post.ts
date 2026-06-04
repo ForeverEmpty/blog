@@ -1,11 +1,12 @@
 export default defineEventHandler(async (event) => {
   requireAdminCsrf(event)
 
-  const body = await readBody<{ notifications?: Partial<AdminNotification>[] }>(event).catch(() => ({}))
+  type NotificationsBody = { notifications?: Partial<AdminNotification>[] }
+  const body = await readBody<NotificationsBody>(event).catch((): NotificationsBody => ({}))
   const notifications = Array.isArray(body.notifications)
     ? body.notifications.map((notification) => ({
         ...notification,
-        audience: 'site'
+        audience: 'site' as const
       }))
     : []
   const existingNotifications = await readNotifications()

@@ -366,7 +366,7 @@ export const createAdminBackup = async (scope: AdminBackupScope = 'full'): Promi
   }
 }
 
-const assertBackupShape = (backup: unknown): asserts backup is AdminBackupPayload => {
+const assertBackupShape: (backup: unknown) => asserts backup is AdminBackupPayload = (backup) => {
   if (
     typeof backup !== 'object' ||
     backup === null ||

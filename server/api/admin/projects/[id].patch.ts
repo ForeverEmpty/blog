@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     sourceUrl: normalizedSourceUrl,
     launchUrl: normalizedLaunchUrl,
     tags: Array.isArray(body.tags)
-      ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean)
+      ? body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean)
       : target.tags,
     featured: typeof body.featured === 'boolean' ? body.featured : target.featured,
     hidden: typeof body.hidden === 'boolean' ? body.hidden : target.hidden,

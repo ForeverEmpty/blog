@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     description: typeof body.description === 'string' ? body.description.trim() : target.description,
     category: typeof body.category === 'string' && body.category.trim() ? body.category.trim() : target.category,
     status: nextStatus,
-    tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean) : target.tags,
+    tags: Array.isArray(body.tags) ? body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean) : target.tags,
     contact: typeof body.contact === 'string' ? body.contact.trim() : target.contact,
     backlinkUrl: typeof body.backlinkUrl === 'string' ? body.backlinkUrl.trim() : target.backlinkUrl,
     reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote.trim() : target.reviewNote,

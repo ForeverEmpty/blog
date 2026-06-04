@@ -23,6 +23,7 @@ const { data: articleSiblings } = await useAsyncData("blog-siblings", () =>
 );
 
 const hasArticle = computed(() => Boolean(article.value && isPublicArticle(article.value)));
+const visibleArticle = computed(() => (hasArticle.value && article.value ? article.value : null));
 const articleEmptyDescription = computed(() => (
   articleError.value
     ? "读取文章时出现问题，可以返回目录重新选择。"
@@ -63,17 +64,17 @@ const currentArticleIndex = computed(() => (
 ));
 const previousArticle = computed(() => (
   currentArticleIndex.value > 0
-    ? articleSiblingsSorted.value[currentArticleIndex.value - 1]
+    ? articleSiblingsSorted.value[currentArticleIndex.value - 1] ?? null
     : null
 ));
 const nextArticle = computed(() => (
   currentArticleIndex.value >= 0 && currentArticleIndex.value < articleSiblingsSorted.value.length - 1
-    ? articleSiblingsSorted.value[currentArticleIndex.value + 1]
+    ? articleSiblingsSorted.value[currentArticleIndex.value + 1] ?? null
     : null
 ));
 const copyMarkdownStatus = ref<"idle" | "copied" | "error">("idle");
 const copyingMarkdown = ref(false);
-let copyMarkdownTimer: ReturnType<typeof setTimeout> | undefined;
+let copyMarkdownTimer: number | undefined;
 
 const copyMarkdownIcon = computed(() => {
   if (copyMarkdownStatus.value === "copied") {
@@ -176,10 +177,12 @@ const isMinimarkStyleNode = (node: unknown) => (
   Array.isArray(node) &&
   node[0] === "style"
 );
-const isMdcStyleNode = (node: unknown) => (
-  typeof node === "object" &&
-  node !== null &&
-  "tag" in node &&
+type MdcStyleNode = {
+  tag: 'style'
+  children?: unknown[]
+}
+const isMdcStyleNode = (node: unknown): node is MdcStyleNode => (
+  isRecord(node) &&
   node.tag === "style"
 );
 const mdcStyleContent = (node: unknown) => {
@@ -231,19 +234,21 @@ const normalizeMinimarkNode = (node: unknown): unknown | null => {
   return [tag, props, ...normalizedChildren];
 };
 const articleRenderValue = computed(() => {
-  if (!article.value) {
-    return null;
+  const currentArticle = visibleArticle.value;
+
+  if (!currentArticle) {
+    return {};
   }
 
-  const body = article.value.body;
+  const body = currentArticle.body;
 
   if (!body) {
-    return article.value;
+    return currentArticle;
   }
 
   if ("children" in body && Array.isArray(body.children)) {
     return {
-      ...article.value,
+      ...currentArticle,
       body: {
         ...body,
         children: body.children.filter((node) => !isMdcStyleNode(node)),
@@ -252,11 +257,11 @@ const articleRenderValue = computed(() => {
   }
 
   if (!("value" in body) || !Array.isArray(body.value)) {
-    return article.value;
+    return currentArticle;
   }
 
   return {
-    ...article.value,
+    ...currentArticle,
     body: {
       ...body,
       value: body.value
@@ -344,7 +349,7 @@ if (hasArticle.value && article.value) {
       },
       mainEntityOfPage: useAbsoluteSiteUrl(article.value.path),
       url: useAbsoluteSiteUrl(article.value.path),
-      keywords: [article.value.category, ...article.value.tags].filter(Boolean).join(", "),
+      keywords: [article.value.category, ...(article.value.tags || [])].filter(Boolean).join(", "),
     },
   });
 } else {
@@ -490,17 +495,17 @@ onBeforeUnmount(() => {
     </section>
 
     <article
-      v-else
+      v-else-if="visibleArticle"
       class="article-shell grid min-h-[calc(100vh-93px)] grid-cols-[minmax(112px,16vw)_minmax(0,1fr)_minmax(200px,280px)] border-b border-line bg-paper max-[1000px]:grid-cols-[minmax(112px,16vw)_minmax(0,1fr)] max-[760px]:grid-cols-1"
       aria-labelledby="article-title"
     >
       <ArticleMetaRail
         class="article-meta-rail"
-        :date="article.date"
-        :author="article.author"
-        :author-url="article.authorUrl"
-        :category="article.category"
-        :tags="article.tags"
+        :date="visibleArticle.date"
+        :author="visibleArticle.author"
+        :author-url="visibleArticle.authorUrl"
+        :category="visibleArticle.category"
+        :tags="visibleArticle.tags"
         :word-count="readingStats.wordCount"
         :reading-minutes="readingStats.readingMinutes"
         :views="articleViews"
@@ -539,10 +544,10 @@ onBeforeUnmount(() => {
               class="m-0 max-w-300 break-words font-display font-normal tracking-normal text-ink text-pretty"
               :class="articleTitleClass"
             >
-              {{ article.title }}
+              {{ visibleArticle.title }}
             </h1>
             <p class="m-0 max-w-190 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
-              {{ article.description }}
+              {{ visibleArticle.description }}
             </p>
             <div
               v-if="isArticleLocked"

@@ -24,7 +24,7 @@ const copied = ref(false)
 const preElement = ref<HTMLPreElement>()
 const codeBlockId = useId()
 const collapsedLineThreshold = 18
-let copiedTimer: ReturnType<typeof window.setTimeout> | undefined
+let copiedTimer: number | undefined
 
 const codeLabel = computed(() => props.filename || props.language || 'code')
 const codeLineCount = computed(() => Math.max(1, props.code.replace(/\n$/, '').split('\n').length))

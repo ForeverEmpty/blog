@@ -39,7 +39,7 @@ const router = useRouter()
 const { searchContentItems } = useArticleSearch()
 const adminAuthRedirecting = ref(false)
 const adminCsrfToken = ref('')
-let adminAuthCheckTimer: ReturnType<typeof setInterval> | undefined
+let adminAuthCheckTimer: number | undefined
 
 const createEmptyAdminSessionStatus = (): AdminSessionStatus => ({
   authenticated: false,
@@ -392,11 +392,11 @@ const backupLoading = ref(false)
 const backupError = ref('')
 const backupRestoreResult = ref<AdminBackupRestoreResult | null>(null)
 const autosaveStatus = ref('自动保存待命')
-let previewTimer: ReturnType<typeof setTimeout> | undefined
-let aboutPreviewTimer: ReturnType<typeof setTimeout> | undefined
-let autosaveTimer: ReturnType<typeof setTimeout> | undefined
+let previewTimer: number | undefined
+let aboutPreviewTimer: number | undefined
+let autosaveTimer: number | undefined
 let autosaveReady = false
-let adminScheduleCheckTimer: ReturnType<typeof setInterval> | undefined
+let adminScheduleCheckTimer: number | undefined
 const adminScheduleNow = ref(Date.now())
 
 const managedArticles = ref<ManagedArticle[]>(sourceArticles.value)
@@ -1654,6 +1654,24 @@ const toggleArticlePinned = async (article: ManagedArticle) => {
 const setArticleWorkflowStatus = async (article: ManagedArticle, workflowStatus: ArticleWorkflowStatus) => {
   const nextPublished = workflowStatus === 'published'
 
+  if (workflowStatus === 'published' && blockingPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
+    setAdminNotice(`发布检查未通过：${blockingPublishChecks.value.map((check) => check.label).join('、')}。`)
+    return
+  }
+
+  if (workflowStatus === 'published' && warningPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
+    const confirmed = await requestAdminConfirmation({
+      title: '发布检查存在提醒',
+      message: `以下项目建议发布前处理：\n${warningPublishChecks.value.map((check) => `- ${check.label}：${check.detail}`).join('\n')}`,
+      confirmLabel: '继续发布',
+      tone: 'warning'
+    })
+
+    if (!confirmed) {
+      return
+    }
+  }
+
   if (selectedArticleId.value === article.id) {
     draftWorkflowStatus.value = workflowStatus
     if (workflowStatus === 'scheduled' && !draftScheduledAt.value) {
@@ -1676,24 +1694,6 @@ const setArticleWorkflowStatus = async (article: ManagedArticle, workflowStatus:
     draftScheduledAt.value = toDatetimeLocalValue(article.scheduledAt) || nextScheduledDatetimeLocalValue()
     setAdminNotice('已载入该文章并切换为定时发布，请选择发布时间后保存。')
     return
-  }
-
-  if (workflowStatus === 'published' && blockingPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
-    setAdminNotice(`发布检查未通过：${blockingPublishChecks.value.map((check) => check.label).join('、')}。`)
-    return
-  }
-
-  if (workflowStatus === 'published' && warningPublishChecks.value.length > 0 && selectedArticleId.value === article.id) {
-    const confirmed = await requestAdminConfirmation({
-      title: '发布检查存在提醒',
-      message: `以下项目建议发布前处理：\n${warningPublishChecks.value.map((check) => `- ${check.label}：${check.detail}`).join('\n')}`,
-      confirmLabel: '继续发布',
-      tone: 'warning'
-    })
-
-    if (!confirmed) {
-      return
-    }
   }
 
   saving.value = true
@@ -3017,7 +3017,6 @@ useSiteSeo({
       v-model:notifications="managedNotifications"
       v-model:notification-settings="notificationSettings"
       :admin-notifications="adminNotifications"
-      :notification-settings="notificationSettings"
       :saving="saving"
       @save-notifications="saveNotifications"
       @save-notification-settings="saveNotificationSettings"

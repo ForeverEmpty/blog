@@ -12,17 +12,18 @@ if (!page.value) {
   });
 }
 
-const tocLinks = useContentTocLinks(() => page.value);
+const aboutPage = computed(() => page.value!);
+const tocLinks = useContentTocLinks(() => aboutPage.value);
 
 useSiteSeo({
-  title: page.value.title,
-  description: page.value.description,
+  title: aboutPage.value.title,
+  description: aboutPage.value.description,
   path: '/about',
   jsonLd: {
     '@context': 'https://schema.org',
     '@type': 'AboutPage',
-    name: page.value.title,
-    description: page.value.description,
+    name: aboutPage.value.title,
+    description: aboutPage.value.description,
     url: useAbsoluteSiteUrl('/about')
   },
 });
@@ -54,15 +55,15 @@ useSiteSeo({
               id="about-title"
               class="m-0 max-w-240 font-display text-[132px] font-normal leading-[0.95] tracking-normal text-ink text-pretty max-[1100px]:text-[88px] max-[520px]:text-[56px]"
             >
-              {{ page.title }}
+              {{ aboutPage.title }}
             </h1>
             <p class="m-0 max-w-190 text-[22px] leading-[1.55] text-muted text-pretty max-[520px]:text-lg">
-              {{ page.description }}
+              {{ aboutPage.description }}
             </p>
           </header>
 
           <div class="grid grid-cols-[minmax(0,760px)_minmax(200px,280px)] items-start gap-(--space-8) max-[1000px]:grid-cols-1">
-            <ContentBody :value="page" />
+            <ContentBody :value="aboutPage" />
             <ContentTableOfContents :links="tocLinks" label="关于目录" />
           </div>
         </div>

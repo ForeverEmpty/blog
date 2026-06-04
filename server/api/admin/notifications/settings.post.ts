@@ -3,7 +3,7 @@ import type { AdminNotificationSettings } from '~~/server/utils/adminStorage'
 export default defineEventHandler(async (event) => {
   requireAdminCsrf(event)
 
-  const body = await readBody<Partial<AdminNotificationSettings>>(event).catch(() => ({}))
+  const body = await readBody<Partial<AdminNotificationSettings>>(event).catch((): Partial<AdminNotificationSettings> => ({}))
   const existing = await readNotificationSettings()
   const settings = await writeNotificationSettings(body)
   const audit = createAdminAuditTrail(existing, settings, [

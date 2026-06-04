@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
   const backlinkUrl = typeof body?.backlinkUrl === 'string' ? body.backlinkUrl.trim() : ''
   const category = typeof body?.category === 'string' && body.category.trim() ? body.category.trim() : '个人站点'
   const tags = Array.isArray(body?.tags)
-    ? body.tags.map(String).map((tag) => tag.trim()).filter(Boolean).slice(0, 6)
+    ? body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean).slice(0, 6)
     : []
   const normalizedUrl = normalizeUrl(url)
   const normalizedBacklinkUrl = backlinkUrl ? normalizeUrl(backlinkUrl) : ''

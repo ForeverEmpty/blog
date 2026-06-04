@@ -7,7 +7,7 @@ type SiteSearchArticle = {
   category?: string
   locked?: boolean
   pinned?: boolean
-  tags: string[]
+  tags?: string[]
   author?: string
   markdown?: string
   contentText?: string
@@ -63,6 +63,7 @@ const { getSearchHighlightTerms, getSearchMatchExcerpt, searchContentItems } = u
 const searchItems = computed<SiteSearchResult[]>(() => [
   ...props.articles.map((article) => ({
     ...article,
+    tags: article.tags || [],
     type: 'article' as const,
     status: article.locked ? '已锁定' : article.pinned ? '已置顶' : '已发布'
   })),

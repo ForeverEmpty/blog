@@ -22,7 +22,7 @@ const { getSearchHighlightTerms, searchContentItems } = useArticleSearch();
 const { data: projectItems } = await useAsyncData("projects-list", () =>
   $fetch<ProjectItem[]>("/api/projects"),
   {
-    default: () => appConfig.projects.items ?? [],
+    default: () => (appConfig.projects.items ?? []) as ProjectItem[],
   },
 );
 const projects = computed(() => projectItems.value);

@@ -1,7 +1,8 @@
 export default defineEventHandler(async (event) => {
   requireAdminCsrf(event)
 
-  const body = await readBody<{ message?: string; detail?: string }>(event).catch(() => ({}))
+  type BuildFailureBody = { message?: string; detail?: string }
+  const body = await readBody<BuildFailureBody>(event).catch((): BuildFailureBody => ({}))
   const message = String(body.message || '构建失败').trim()
   const detail = String(body.detail || '').trim()
 

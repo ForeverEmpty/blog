@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 
 const getFriendInspectionOptions = (event: H3Event) => {
   const runtimeConfig = useRuntimeConfig(event)
-  const appConfig = useAppConfig(event)
+  const appConfig = useAppConfig()
 
   return {
     siteName: String(appConfig.site?.name || 'ChankoBlog'),
@@ -11,7 +11,8 @@ const getFriendInspectionOptions = (event: H3Event) => {
 }
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ ids?: string[] }>(event).catch(() => ({}))
+  type InspectBody = { ids?: string[] }
+  const body = await readBody<InspectBody>(event).catch((): InspectBody => ({}))
   const requestedIds = Array.isArray(body?.ids)
     ? new Set(body.ids.map(String).filter(Boolean))
     : null

@@ -279,7 +279,13 @@ export const writeAdminLog = async (input: {
     ]
   ))
 
-  return toLog(result.rows[0])
+  const row = result.rows[0]
+
+  if (!row) {
+    throw new Error('Admin log insert did not return a row')
+  }
+
+  return toLog(row)
 }
 
 export const readAdminLogs = async (limit = 120) => {
@@ -325,7 +331,13 @@ export const createArticleVersion = async (article: AdminArticle, action: string
     ]
   ))
 
-  return toVersion(result.rows[0])
+  const row = result.rows[0]
+
+  if (!row) {
+    throw new Error('Article version insert did not return a row')
+  }
+
+  return toVersion(row)
 }
 
 export const readArticleVersions = async (slug?: string, limit = 80) => {
@@ -403,7 +415,13 @@ export const saveArticleAutosave = async (article: AdminArticle) => {
     ]
   ))
 
-  return toAutosave(result.rows[0])
+  const row = result.rows[0]
+
+  if (!row) {
+    throw new Error('Article autosave upsert did not return a row')
+  }
+
+  return toAutosave(row)
 }
 
 export const readArticleAutosaves = async () => {

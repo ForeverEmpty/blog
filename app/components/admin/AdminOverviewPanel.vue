@@ -77,6 +77,7 @@ const trendChartPoints = computed(() => {
     }
   })
 })
+type TrendChartPoint = (typeof trendChartPoints.value)[number]
 const trendXAxisTicks = computed(() => {
   const points = trendChartPoints.value
 
@@ -86,7 +87,9 @@ const trendXAxisTicks = computed(() => {
 
   return [0, Math.floor((points.length - 1) / 2), points.length - 1]
     .map((index) => points[index])
-    .filter((point, index, items) => point && items.findIndex((item) => item.date === point.date) === index)
+    .filter((point, index, items): point is TrendChartPoint => (
+      !!point && items.findIndex((item) => item?.date === point.date) === index
+    ))
 })
 const trendPolylinePoints = computed(() => trendChartPoints.value.map((point) => `${point.x},${point.y}`).join(' '))
 const trendAreaPoints = computed(() => {
@@ -97,6 +100,10 @@ const trendAreaPoints = computed(() => {
   const baselineY = trendChart.plotBottom
   const first = trendChartPoints.value[0]
   const last = trendChartPoints.value[trendChartPoints.value.length - 1]
+
+  if (!first || !last) {
+    return ''
+  }
 
   return `${first.x},${baselineY} ${trendPolylinePoints.value} ${last.x},${baselineY}`
 })

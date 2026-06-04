@@ -183,7 +183,7 @@ const writeAiSummaryFailureLog = async (event: H3Event, slug: string, message: s
 };
 
 export default defineEventHandler(async (event) => {
-  const appConfig = useAppConfig(event);
+  const appConfig = useAppConfig();
   const aiSummary = (appConfig.aiSummary || {}) as AiSummaryConfig;
 
   if (!aiSummary.enabled) {
