@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { adminPanels } from '~/config/adminPanels'
 import type {
   AdminPanel,
-  AdminPanelItem,
   AdminBackupPayload,
   AdminBackupRestorePreview,
   AdminBackupRestoreResult,
@@ -30,7 +30,8 @@ import type {
 } from '~/types/admin'
 
 definePageMeta({
-  layout: false
+  layout: 'admin',
+  alias: ['/admin/:panel']
 })
 
 const appConfig = useAppConfig()
@@ -38,6 +39,7 @@ const route = useRoute()
 const router = useRouter()
 const { searchContentItems } = useArticleSearch()
 const adminAuthRedirecting = ref(false)
+const adminPageReady = ref(false)
 const adminCsrfToken = ref('')
 let adminAuthCheckTimer: number | undefined
 
@@ -53,6 +55,7 @@ const createEmptyAdminSessionStatus = (): AdminSessionStatus => ({
 })
 
 const adminSessionStatus = ref<AdminSessionStatus>(createEmptyAdminSessionStatus())
+const adminLayout = useAdminLayoutState()
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
@@ -208,27 +211,35 @@ const adminFetch = async <T>(request: string, options?: AdminFetchOptions) => {
   }
 }
 
-const { data: sourceArticles } = await useAsyncData('admin-api-articles', () =>
+const { data: sourceArticles, refresh: refreshSourceArticles } = useAsyncData('admin-api-articles', () =>
   adminFetch<ManagedArticle[]>('/api/admin/articles'),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceProjects, refresh: refreshProjects } = await useAsyncData('admin-api-projects', () =>
+const { data: sourceProjects, refresh: refreshProjects } = useAsyncData('admin-api-projects', () =>
   adminFetch<ManagedProject[]>('/api/admin/projects'),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceFriends, refresh: refreshFriends } = await useAsyncData('admin-api-friends', () =>
+const { data: sourceFriends, refresh: refreshFriends } = useAsyncData('admin-api-friends', () =>
   adminFetch<ManagedFriend[]>('/api/admin/friends'),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceAbout } = await useAsyncData('admin-api-about', () =>
+const { data: sourceAbout, refresh: refreshSourceAbout } = useAsyncData('admin-api-about', () =>
   adminFetch<ManagedAboutPage>('/api/admin/about'),
   {
+    server: false,
+    immediate: false,
     default: () => ({
       title: '关于',
       description: '',
@@ -236,27 +247,35 @@ const { data: sourceAbout } = await useAsyncData('admin-api-about', () =>
     })
   }
 )
-const { data: sourceMediaAssets } = await useAsyncData('admin-api-media', () =>
+const { data: sourceMediaAssets, refresh: refreshSourceMediaAssets } = useAsyncData('admin-api-media', () =>
   adminFetch<ManagedMediaAsset[]>('/api/admin/media').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceArticleVersions } = await useAsyncData('admin-api-article-versions', () =>
+const { data: sourceArticleVersions, refresh: refreshSourceArticleVersions } = useAsyncData('admin-api-article-versions', () =>
   adminFetch<ManagedArticleVersion[]>('/api/admin/articles/versions').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceArticleAutosaves } = await useAsyncData('admin-api-article-autosaves', () =>
+const { data: sourceArticleAutosaves, refresh: refreshSourceArticleAutosaves } = useAsyncData('admin-api-article-autosaves', () =>
   adminFetch<ManagedArticleAutosave[]>('/api/admin/articles/autosaves').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceAdminLogs } = await useAsyncData('admin-api-logs', () =>
+const { data: sourceAdminLogs, refresh: refreshSourceAdminLogs } = useAsyncData('admin-api-logs', () =>
   adminFetch<ManagedAdminLog[]>('/api/admin/logs').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
@@ -270,15 +289,19 @@ const emptyVisitStats = (): AdminVisitStats => ({
   recentArticles: [],
   quietArticles: []
 })
-const { data: sourceVisitStats, refresh: refreshVisitStats } = await useAsyncData('admin-api-visit-stats', () =>
+const { data: sourceVisitStats, refresh: refreshVisitStats } = useAsyncData('admin-api-visit-stats', () =>
   adminFetch<AdminVisitStats>('/api/admin/analytics/views').catch(emptyVisitStats),
   {
+    server: false,
+    immediate: false,
     default: emptyVisitStats
   }
 )
-const { data: sourceNotifications } = await useAsyncData('admin-api-site-notifications', () =>
+const { data: sourceNotifications, refresh: refreshSourceNotifications } = useAsyncData('admin-api-site-notifications', () =>
   adminFetch<ManagedNotification[]>('/api/admin/site-notifications').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
@@ -322,15 +345,19 @@ const defaultNotificationSettings = (): ManagedNotificationSettings => ({
   ]
 })
 const cloneNotificationSettings = (settings: ManagedNotificationSettings) => JSON.parse(JSON.stringify(settings)) as ManagedNotificationSettings
-const { data: sourceAdminNotifications } = await useAsyncData('admin-api-notification-events', () =>
+const { data: sourceAdminNotifications, refresh: refreshSourceAdminNotifications } = useAsyncData('admin-api-notification-events', () =>
   adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events').catch(() => []),
   {
+    server: false,
+    immediate: false,
     default: () => []
   }
 )
-const { data: sourceNotificationSettings } = await useAsyncData('admin-api-notification-settings', () =>
+const { data: sourceNotificationSettings, refresh: refreshSourceNotificationSettings } = useAsyncData('admin-api-notification-settings', () =>
   adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings').catch(defaultNotificationSettings),
   {
+    server: false,
+    immediate: false,
     default: defaultNotificationSettings
   }
 )
@@ -346,27 +373,27 @@ const defaultCommentModerationRules = (): ManagedCommentModerationRules => ({
   blockedIps: []
 })
 const cloneCommentModerationRules = (rules: ManagedCommentModerationRules) => JSON.parse(JSON.stringify(rules)) as ManagedCommentModerationRules
-const { data: sourceCommentModerationRules } = await useAsyncData('admin-api-comment-moderation-rules', () =>
+const { data: sourceCommentModerationRules, refresh: refreshSourceCommentModerationRules } = useAsyncData('admin-api-comment-moderation-rules', () =>
   adminFetch<ManagedCommentModerationRules>('/api/admin/comments/rules').catch(defaultCommentModerationRules),
   {
+    server: false,
+    immediate: false,
     default: defaultCommentModerationRules
   }
 )
-const panels: AdminPanelItem[] = [
-  { key: 'overview', label: '总览', icon: 'lucide:layout-dashboard' },
-  { key: 'articles', label: '文章', icon: 'lucide:file-pen-line' },
-  { key: 'media', label: '媒体', icon: 'lucide:images' },
-  { key: 'projects', label: '项目', icon: 'lucide:folder-kanban' },
-  { key: 'friends', label: '友链', icon: 'lucide:link' },
-  { key: 'comments', label: '评论', icon: 'lucide:message-square-text' },
-  { key: 'notifications', label: '通知', icon: 'lucide:bell' },
-  { key: 'about', label: '关于', icon: 'lucide:user-round-pen' },
-  { key: 'seo', label: 'SEO', icon: 'lucide:search-check' },
-  { key: 'backup', label: '备份', icon: 'lucide:database-backup' },
-  { key: 'logs', label: '日志', icon: 'lucide:scroll-text' }
-]
+const panels = adminPanels
+const panelKeys = panels.map((panel) => panel.key)
+const isAdminPanel = (value: unknown): value is AdminPanel => (
+  typeof value === 'string' && panelKeys.includes(value as AdminPanel)
+)
+const getRoutePanel = () => {
+  const rawPanel = route.params.panel
+  const panel = Array.isArray(rawPanel) ? rawPanel[0] : rawPanel
 
-const activePanel = ref<AdminPanel>('overview')
+  return isAdminPanel(panel) ? panel : 'overview'
+}
+
+const activePanel = ref<AdminPanel>(getRoutePanel())
 const saving = ref(false)
 const adminNotice = ref('')
 const previewValue = shallowRef<unknown | null>(null)
@@ -414,8 +441,28 @@ const notificationSettings = ref(cloneNotificationSettings(sourceNotificationSet
 const aboutTitle = ref(sourceAbout.value.title)
 const aboutDescription = ref(sourceAbout.value.description)
 const aboutMarkdown = ref(sourceAbout.value.markdown)
+const adminDataLoaded = reactive({
+  articles: false,
+  projects: false,
+  friends: false,
+  about: false,
+  media: false,
+  articleReliability: false,
+  logs: false,
+  visits: false,
+  siteNotifications: false,
+  adminNotifications: false,
+  commentModerationRules: false,
+  comments: false
+})
+
+watchEffect(() => {
+  adminLayout.notice.value = adminNotice.value
+  adminLayout.sessionStatus.value = adminSessionStatus.value
+})
 
 const selectedArticleId = ref(managedArticles.value[0]?.id || 'new')
+const draftSlug = ref(managedArticles.value[0]?.slug || 'new-article')
 const draftTitle = ref(managedArticles.value[0]?.title || '新的文章标题')
 const draftDescription = ref(managedArticles.value[0]?.description || '用于文章列表和详情页的摘要。')
 const draftCategory = ref(managedArticles.value[0]?.category || '未分类')
@@ -523,6 +570,34 @@ const articleWorkflowOptions: {
 const articleWorkflowLabelMap = Object.fromEntries(
   articleWorkflowOptions.map((option) => [option.value, option.label])
 ) as Record<ArticleWorkflowStatus, string>
+const normalizeArticleSlugInput = (value: string) => {
+  const trimmed = value.trim().replace(/\.md$/i, '')
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/['"]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || 'new-article'
+}
+const getUniqueArticleSlug = (seed: string) => {
+  const base = normalizeArticleSlugInput(seed)
+  const usedSlugs = new Set(managedArticles.value.map((article) => article.slug))
+
+  if (!usedSlugs.has(base)) {
+    return base
+  }
+
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base}-${index}`
+
+    if (!usedSlugs.has(candidate)) {
+      return candidate
+    }
+  }
+
+  return `${base}-${Date.now().toString(36)}`
+}
 const isScheduledArticleReady = (article: Pick<ManagedArticle, 'scheduledAt'>) => {
   if (!article.scheduledAt) {
     return false
@@ -896,9 +971,11 @@ const publishChecks = computed<ArticlePublishCheck[]>(() => {
   const dateNotTooFuture = dateIsValid
     ? usesScheduledPublish || publishedDate.getTime() <= today.getTime() + 1000 * 60 * 60 * 24
     : false
-  const duplicateSlug = selectedArticleId.value === 'new'
-    ? managedArticles.value.some((article) => article.title.trim().toLowerCase() === title.toLowerCase())
-    : false
+  const normalizedSlug = normalizeArticleSlugInput(draftSlug.value)
+  const slugIsValid = /^[a-z0-9-]+$/i.test(normalizedSlug)
+  const duplicateSlug = managedArticles.value.some((article) => (
+    article.slug === normalizedSlug && article.id !== selectedArticleId.value
+  ))
 
   return [
     createPublishCheck(
@@ -967,11 +1044,18 @@ const publishChecks = computed<ArticlePublishCheck[]>(() => {
       'warning'
     ),
     createPublishCheck(
-      'duplicate',
-      '重复标题',
+      'filename-format',
+      '文件名格式',
+      slugIsValid,
+      `文件名将保存为 ${normalizedSlug}.md。`,
+      '文件名只能包含英文字母、数字和短横线。'
+    ),
+    createPublishCheck(
+      'duplicate-filename',
+      '重复文件名',
       !duplicateSlug,
-      '未发现同名文章。',
-      '已存在同名文章，新建发布会覆盖同 slug 文件，请先调整标题。',
+      '未发现同名文件。',
+      `content/blog/${normalizedSlug}.md 已存在，请先调整文件名。`,
       'error'
     ),
     createPublishCheck(
@@ -1037,27 +1121,22 @@ const stats = computed<AdminStat[]>(() => [
   }
 ])
 
-const selectPanel = (panel: AdminPanel) => {
+const refreshActivePanelData = (panel: AdminPanel) => {
+  if (!adminPageReady.value) {
+    return
+  }
+
+  void loadAdminPanelData(panel)
+}
+
+const selectPanel = async (panel: AdminPanel) => {
   activePanel.value = panel
+  refreshActivePanelData(panel)
 
-  if (panel === 'comments' && managedComments.value.length === 0) {
-    void refreshComments()
-  }
+  const path = panel === 'overview' ? '/admin' : `/admin/${panel}`
 
-  if (panel === 'media') {
-    void refreshMedia()
-  }
-
-  if (panel === 'logs') {
-    void refreshLogs()
-  }
-
-  if (panel === 'notifications') {
-    void refreshAdminNotifications()
-  }
-
-  if (panel === 'overview') {
-    void refreshVisits()
+  if (route.path !== path) {
+    await router.push(path)
   }
 }
 
@@ -1074,6 +1153,7 @@ const logoutAdmin = async () => {
 
 const selectArticle = (article: ManagedArticle) => {
   selectedArticleId.value = article.id
+  draftSlug.value = article.slug
   draftTitle.value = article.title
   draftDescription.value = article.description
   draftCategory.value = article.category
@@ -1088,6 +1168,7 @@ const selectArticle = (article: ManagedArticle) => {
 
 const createArticle = () => {
   selectedArticleId.value = 'new'
+  draftSlug.value = getUniqueArticleSlug('new-article')
   draftTitle.value = '新的文章标题'
   draftDescription.value = '用于文章列表和详情页的摘要。'
   draftCategory.value = '未分类'
@@ -1098,39 +1179,31 @@ const createArticle = () => {
   draftLocked.value = false
   draftPinned.value = false
   draftMarkdown.value = '# 新的文章标题\n\n从这里开始写 Markdown。'
-  activePanel.value = 'articles'
+  void selectPanel('articles')
 }
 
 const replaceArticle = (article: ManagedArticle) => {
-  const index = managedArticles.value.findIndex((item) => item.id === article.id)
+  const index = managedArticles.value.findIndex((item) => (
+    item.id === article.id || item.id === selectedArticleId.value
+  ))
 
   if (index >= 0) {
     managedArticles.value[index] = article
   } else {
     managedArticles.value.unshift(article)
   }
+
+  managedArticles.value = managedArticles.value.filter((item, itemIndex, articles) => (
+    articles.findIndex((articleItem) => articleItem.id === item.id) === itemIndex
+  ))
 }
 
-const refreshAdminContent = async () => {
-  const [articles, projects, friends, about, notifications, notificationEvents, settings] = await Promise.all([
-    adminFetch<ManagedArticle[]>('/api/admin/articles'),
-    adminFetch<ManagedProject[]>('/api/admin/projects'),
-    adminFetch<ManagedFriend[]>('/api/admin/friends'),
-    adminFetch<ManagedAboutPage>('/api/admin/about'),
-    adminFetch<ManagedNotification[]>('/api/admin/site-notifications'),
-    adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events'),
-    adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings')
-  ])
+const refreshArticles = async () => {
+  await refreshSourceArticles()
+  const articles = sourceArticles.value || []
 
   managedArticles.value = articles
-  managedProjects.value = projects
-  managedFriends.value = friends
-  aboutTitle.value = about.title
-  aboutDescription.value = about.description
-  aboutMarkdown.value = about.markdown
-  managedNotifications.value = notifications
-  adminNotifications.value = notificationEvents
-  notificationSettings.value = cloneNotificationSettings(settings)
+  adminDataLoaded.articles = true
 
   if (!articles.some((article) => article.id === selectedArticleId.value)) {
     if (articles[0]) {
@@ -1139,6 +1212,14 @@ const refreshAdminContent = async () => {
       selectedArticleId.value = 'new'
     }
   }
+}
+
+const refreshProjectsContent = async () => {
+  await refreshProjects()
+  const projects = sourceProjects.value || []
+
+  managedProjects.value = projects
+  adminDataLoaded.projects = true
 
   if (!projects.some((project) => project.id === selectedProjectId.value)) {
     if (projects[0]) {
@@ -1147,6 +1228,14 @@ const refreshAdminContent = async () => {
       selectedProjectId.value = 'new'
     }
   }
+}
+
+const refreshFriendsContent = async () => {
+  await refreshFriends()
+  const friends = sourceFriends.value || []
+
+  managedFriends.value = friends
+  adminDataLoaded.friends = true
 
   if (!friends.some((friend) => friend.id === selectedFriendId.value)) {
     if (friends[0]) {
@@ -1157,15 +1246,53 @@ const refreshAdminContent = async () => {
   }
 }
 
+const refreshAboutContent = async () => {
+  await refreshSourceAbout()
+  const about = sourceAbout.value || {
+    title: '关于',
+    description: '',
+    markdown: ''
+  }
+
+  aboutTitle.value = about.title
+  aboutDescription.value = about.description
+  aboutMarkdown.value = about.markdown
+  adminDataLoaded.about = true
+}
+
+const refreshSiteNotifications = async () => {
+  await refreshSourceNotifications()
+  managedNotifications.value = sourceNotifications.value || []
+  adminDataLoaded.siteNotifications = true
+}
+
+const refreshCommentModerationRules = async () => {
+  await refreshSourceCommentModerationRules()
+  commentModerationRules.value = cloneCommentModerationRules(sourceCommentModerationRules.value || defaultCommentModerationRules())
+  adminDataLoaded.commentModerationRules = true
+}
+
+const refreshAdminContent = async () => {
+  await Promise.all([
+    refreshArticles(),
+    refreshProjectsContent(),
+    refreshFriendsContent(),
+    refreshAboutContent(),
+    refreshSiteNotifications(),
+    refreshAdminNotifications()
+  ])
+}
+
 const refreshArticleReliability = async () => {
   try {
-    const [versions, autosaves] = await Promise.all([
-      adminFetch<ManagedArticleVersion[]>('/api/admin/articles/versions'),
-      adminFetch<ManagedArticleAutosave[]>('/api/admin/articles/autosaves')
+    await Promise.all([
+      refreshSourceArticleVersions(),
+      refreshSourceArticleAutosaves()
     ])
 
-    articleVersions.value = versions
-    articleAutosaves.value = autosaves
+    articleVersions.value = sourceArticleVersions.value || []
+    articleAutosaves.value = sourceArticleAutosaves.value || []
+    adminDataLoaded.articleReliability = true
   } catch {
     autosaveStatus.value = '可靠性记录读取失败，请检查 PostgreSQL'
   }
@@ -1176,7 +1303,9 @@ const refreshLogs = async () => {
   logsError.value = ''
 
   try {
-    adminLogs.value = await adminFetch<ManagedAdminLog[]>('/api/admin/logs')
+    await refreshSourceAdminLogs()
+    adminLogs.value = sourceAdminLogs.value || []
+    adminDataLoaded.logs = true
   } catch {
     logsError.value = '后台日志读取失败，请确认 PostgreSQL 配置可用。'
   } finally {
@@ -1191,6 +1320,7 @@ const refreshVisits = async () => {
   try {
     await refreshVisitStats()
     visitStats.value = sourceVisitStats.value || emptyVisitStats()
+    adminDataLoaded.visits = true
   } catch {
     visitStatsError.value = '访问统计读取失败，请检查登录态和服务端日志。'
   } finally {
@@ -1219,13 +1349,14 @@ const saveNotifications = async () => {
 
 const refreshAdminNotifications = async () => {
   try {
-    const [events, settings] = await Promise.all([
-      adminFetch<ManagedAdminNotification[]>('/api/admin/notifications/events'),
-      adminFetch<ManagedNotificationSettings>('/api/admin/notifications/settings')
+    await Promise.all([
+      refreshSourceAdminNotifications(),
+      refreshSourceNotificationSettings()
     ])
 
-    adminNotifications.value = events
-    notificationSettings.value = cloneNotificationSettings(settings)
+    adminNotifications.value = sourceAdminNotifications.value || []
+    notificationSettings.value = cloneNotificationSettings(sourceNotificationSettings.value || defaultNotificationSettings())
+    adminDataLoaded.adminNotifications = true
   } catch {
     setAdminNotice('后台通知读取失败，请检查登录态和服务端日志。')
   }
@@ -1254,9 +1385,107 @@ const refreshMedia = async () => {
   mediaError.value = ''
 
   try {
-    mediaAssets.value = await adminFetch<ManagedMediaAsset[]>('/api/admin/media')
+    await refreshSourceMediaAssets()
+    mediaAssets.value = sourceMediaAssets.value || []
+    adminDataLoaded.media = true
   } catch {
     mediaError.value = '媒体读取失败，请检查 public/media 权限或服务端日志。'
+  }
+}
+
+const loadAdminDataWhenNeeded = async (loaded: boolean, refresh: () => Promise<void>, force = false) => {
+  if (!force && loaded) {
+    return
+  }
+
+  await refresh()
+}
+
+const loadAdminPanelData = async (panel: AdminPanel, options: { force?: boolean } = {}) => {
+  const force = options.force === true
+
+  try {
+    if (panel === 'overview') {
+      await Promise.all([
+        loadAdminDataWhenNeeded(adminDataLoaded.articles, refreshArticles, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.projects, refreshProjectsContent, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.friends, refreshFriendsContent, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.visits, refreshVisits, force)
+      ])
+
+      if (!adminDataLoaded.comments || force) {
+        void refreshComments()
+      }
+
+      return
+    }
+
+    if (panel === 'articles') {
+      await Promise.all([
+        loadAdminDataWhenNeeded(adminDataLoaded.articles, refreshArticles, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.articleReliability, refreshArticleReliability, force)
+      ])
+
+      if (!adminDataLoaded.media || force) {
+        void refreshMedia()
+      }
+
+      void updateMarkdownPreview()
+
+      return
+    }
+
+    if (panel === 'media') {
+      await loadAdminDataWhenNeeded(adminDataLoaded.media, refreshMedia, force)
+      return
+    }
+
+    if (panel === 'projects') {
+      await loadAdminDataWhenNeeded(adminDataLoaded.projects, refreshProjectsContent, force)
+      return
+    }
+
+    if (panel === 'friends') {
+      await loadAdminDataWhenNeeded(adminDataLoaded.friends, refreshFriendsContent, force)
+      return
+    }
+
+    if (panel === 'about') {
+      await loadAdminDataWhenNeeded(adminDataLoaded.about, refreshAboutContent, force)
+      void updateAboutMarkdownPreview()
+      return
+    }
+
+    if (panel === 'comments') {
+      await Promise.all([
+        loadAdminDataWhenNeeded(adminDataLoaded.comments, refreshComments, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.commentModerationRules, refreshCommentModerationRules, force)
+      ])
+      return
+    }
+
+    if (panel === 'notifications') {
+      await Promise.all([
+        loadAdminDataWhenNeeded(adminDataLoaded.siteNotifications, refreshSiteNotifications, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.adminNotifications, refreshAdminNotifications, force)
+      ])
+      return
+    }
+
+    if (panel === 'seo') {
+      await Promise.all([
+        loadAdminDataWhenNeeded(adminDataLoaded.articles, refreshArticles, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.projects, refreshProjectsContent, force),
+        loadAdminDataWhenNeeded(adminDataLoaded.friends, refreshFriendsContent, force)
+      ])
+      return
+    }
+
+    if (panel === 'logs') {
+      await loadAdminDataWhenNeeded(adminDataLoaded.logs, refreshLogs, force)
+    }
+  } catch {
+    setAdminNotice('当前后台页面数据加载失败，请检查登录态和服务端日志。')
   }
 }
 
@@ -1446,11 +1675,13 @@ const deleteSelectedMedia = async (assets: ManagedMediaAsset[]) => {
 
 const buildDraftPayload = () => {
   const current = managedArticles.value.find((article) => article.id === selectedArticleId.value)
+  const slug = normalizeArticleSlugInput(draftSlug.value)
 
   return {
     current,
     body: {
-      slug: current?.slug,
+      slug,
+      previousSlug: current?.slug,
       title: draftTitle.value,
       description: draftDescription.value,
       date: draftDate.value,
@@ -1497,7 +1728,7 @@ const createProject = () => {
   projectHidden.value = true
   projectOrder.value = ((managedProjects.value.at(-1)?.order || managedProjects.value.length * 10) + 10)
   projectCoverUrl.value = ''
-  activePanel.value = 'projects'
+  void selectPanel('projects')
 }
 
 const selectFriend = (friend: ManagedFriend) => {
@@ -1532,7 +1763,7 @@ const createFriend = () => {
   friendFeatured.value = false
   friendOrder.value = ((managedFriends.value.at(-1)?.order || managedFriends.value.length * 10) + 10)
   friendStatus.value = '待审核'
-  activePanel.value = 'friends'
+  void selectPanel('friends')
 }
 
 const replaceFriend = (friend: ManagedFriend) => {
@@ -1587,13 +1818,14 @@ const saveDraft = async () => {
 
     replaceArticle(article)
     selectedArticleId.value = article.id
+    draftSlug.value = article.slug
     draftWorkflowStatus.value = getArticleWorkflowStatus(article)
     await refreshArticleReliability()
     void refreshLogs()
     autosaveStatus.value = '已保存，自动保存已清理'
     setAdminNotice(current ? '文章已写入 content/blog，并记录旧版本。' : '文章已写入 content/blog。')
-  } catch {
-    setAdminNotice('文章保存失败，请检查服务端日志。')
+  } catch (error) {
+    setAdminNotice(getErrorStatusCode(error) === 409 ? '文章保存失败：文件名已存在。' : '文章保存失败，请检查服务端日志。')
   } finally {
     saving.value = false
   }
@@ -1815,6 +2047,7 @@ const saveArticleAutosave = async () => {
 
 const selectArticleAutosave = (autosave: ManagedArticleAutosave) => {
   selectedArticleId.value = managedArticles.value.find((article) => article.slug === autosave.slug)?.id || 'new'
+  draftSlug.value = autosave.slug
   draftTitle.value = autosave.title
   draftDescription.value = autosave.description
   draftCategory.value = autosave.category
@@ -1932,7 +2165,7 @@ const saveProject = async () => {
     replaceProject(project)
     selectProject(project)
     selectedProjectId.value = project.id
-    await refreshProjects()
+    await refreshProjectsContent()
     void refreshLogs()
     setAdminNotice(current ? '项目已更新。' : '项目已写入 data/projects.json。')
   } catch (error) {
@@ -1960,7 +2193,7 @@ const patchProject = async (project: ManagedProject, payload: Partial<ManagedPro
       selectProject(updated)
     }
 
-    await refreshProjects()
+    await refreshProjectsContent()
     void refreshLogs()
     setAdminNotice(notice)
   } catch {
@@ -1992,7 +2225,7 @@ const inspectProject = async (project: ManagedProject) => {
       selectProject(updated)
     }
 
-    await refreshProjects()
+    await refreshProjectsContent()
     void refreshLogs()
     setAdminNotice(`项目巡检完成：${updated.name} / ${updated.checkStatus}。`)
   } catch {
@@ -2033,7 +2266,7 @@ const inspectProjects = async (projects: ManagedProject[]) => {
       selectProject(selected)
     }
 
-    await refreshProjects()
+    await refreshProjectsContent()
     void refreshLogs()
     setAdminNotice(`已巡检 ${result.checkedCount} 个项目，${result.warningCount} 个提醒，${result.errorCount} 个异常。`)
   } catch {
@@ -2084,7 +2317,7 @@ const moveProject = (project: ManagedProject, direction: 'up' | 'down') => {
         selectProject(updatedTarget)
       }
 
-      void refreshProjects()
+      void refreshProjectsContent()
       void refreshLogs()
       setAdminNotice('项目排序已更新。')
     })
@@ -2125,7 +2358,7 @@ const deleteProject = async (project: ManagedProject) => {
       }
     }
 
-    await refreshProjects()
+    await refreshProjectsContent()
     void refreshLogs()
     setAdminNotice('项目已删除。')
     pushUndoAction({
@@ -2139,7 +2372,7 @@ const deleteProject = async (project: ManagedProject) => {
 
         replaceProject(restored)
         selectProject(restored)
-        await refreshProjects()
+        await refreshProjectsContent()
         void refreshLogs()
         setAdminNotice('已撤销项目删除。')
       }
@@ -2185,7 +2418,7 @@ const saveFriend = async () => {
 
     replaceFriend(friend)
     selectFriend(friend)
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice(current ? '友链已更新。' : '友链申请已写入 data/friends.json。')
   } catch {
@@ -2225,6 +2458,7 @@ const refreshComments = async () => {
 
   try {
     managedComments.value = await adminFetch<ManagedComment[]>('/api/admin/comments')
+    adminDataLoaded.comments = true
   } catch {
     commentsError.value = '评论读取失败，请确认 Waline PostgreSQL 服务已启动。'
   } finally {
@@ -2432,7 +2666,7 @@ const setFriendStatus = async (friend: ManagedFriend, status: ManagedFriend['sta
       selectFriend(updated)
     }
 
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice(`友链状态已更新为：${status}。`)
   } catch {
@@ -2459,7 +2693,7 @@ const toggleFriendFeatured = async (friend: ManagedFriend) => {
       selectFriend(updated)
     }
 
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice(updated.featured ? '友链已置顶展示。' : '友链已取消置顶。')
   } catch {
@@ -2483,7 +2717,7 @@ const inspectFriend = async (friend: ManagedFriend) => {
       selectFriend(updated)
     }
 
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice(`友链巡检完成：${updated.name} / ${updated.checkStatus}。`)
   } catch {
@@ -2524,7 +2758,7 @@ const inspectFriends = async (friends: ManagedFriend[]) => {
       selectFriend(selected)
     }
 
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice(`已巡检 ${result.checkedCount} 个友链，${result.warningCount} 个提醒，${result.errorCount} 个异常。`)
   } catch {
@@ -2564,7 +2798,7 @@ const deleteFriend = async (friend: ManagedFriend) => {
       }
     }
 
-    await refreshFriends()
+    await refreshFriendsContent()
     void refreshLogs()
     setAdminNotice('友链已删除。')
     pushUndoAction({
@@ -2578,7 +2812,7 @@ const deleteFriend = async (friend: ManagedFriend) => {
 
         replaceFriend(restored)
         selectFriend(restored)
-        await refreshFriends()
+        await refreshFriendsContent()
         void refreshLogs()
         setAdminNotice('已撤销友链删除。')
       }
@@ -2637,6 +2871,10 @@ watch(
       return
     }
 
+    if (activePanel.value !== 'articles') {
+      return
+    }
+
     if (previewTimer) {
       window.clearTimeout(previewTimer)
     }
@@ -2655,6 +2893,10 @@ watch(
       return
     }
 
+    if (activePanel.value !== 'about') {
+      return
+    }
+
     if (aboutPreviewTimer) {
       window.clearTimeout(aboutPreviewTimer)
     }
@@ -2670,6 +2912,7 @@ watch(
   [
     selectedArticleId,
     draftTitle,
+    draftSlug,
     draftDate,
     draftCategory,
     draftTags,
@@ -2721,6 +2964,24 @@ watch(adminScheduleNow, () => {
   }
 })
 
+watch(
+  () => route.params.panel,
+  async () => {
+    const nextPanel = getRoutePanel()
+    const rawPanel = route.params.panel
+    const routePanel = Array.isArray(rawPanel) ? rawPanel[0] : rawPanel
+
+    if (routePanel && !isAdminPanel(routePanel)) {
+      await router.replace('/admin')
+      return
+    }
+
+    activePanel.value = nextPanel
+    refreshActivePanelData(nextPanel)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   if (previewTimer) {
     window.clearTimeout(previewTimer)
@@ -2752,6 +3013,9 @@ onBeforeUnmount(() => {
     window.removeEventListener('focus', checkAdminSession)
     document.removeEventListener('visibilitychange', checkAdminSessionWhenVisible)
   }
+
+  adminLayout.setCreateArticleHandler(null)
+  adminLayout.setLogoutHandler(null)
 })
 
 const initializeAdminPage = async () => {
@@ -2761,17 +3025,13 @@ const initializeAdminPage = async () => {
     return
   }
 
-  await refreshAdminContent().catch(() => {
-    setAdminNotice('后台数据刷新失败，请检查登录态和服务端日志。')
-  })
-  void refreshMedia()
-  void refreshComments()
-  void refreshArticleReliability()
-  void refreshVisits()
-  void refreshLogs()
+  adminPageReady.value = true
+  await loadAdminPanelData(activePanel.value, { force: true })
 }
 
 onMounted(() => {
+  adminLayout.setCreateArticleHandler(createArticle)
+  adminLayout.setLogoutHandler(logoutAdmin)
   void initializeAdminPage()
   adminAuthCheckTimer = window.setInterval(() => {
     void checkAdminSession()
@@ -2792,17 +3052,9 @@ useSiteSeo({
 </script>
 
 <template>
-  <AdminFrame
-    :active-panel="activePanel"
-    :panels="panels"
-    :notice="adminNotice"
-    :session-status="adminSessionStatus"
-    @select-panel="selectPanel"
-    @create-article="createArticle"
-    @logout="logoutAdmin"
-  >
+  <div class="grid gap-(--space-8)">
     <AdminOverviewPanel
-      v-show="activePanel === 'overview'"
+      v-if="activePanel === 'overview'"
       :stats="stats"
       :latest-articles="latestArticles"
       :latest-projects="latestProjects"
@@ -2845,13 +3097,14 @@ useSiteSeo({
       </article>
     </section>
 
-    <AdminArticlesPanel
-      v-show="activePanel === 'articles'"
+    <LazyAdminArticlesPanel
+      v-if="activePanel === 'articles'"
       v-model:article-search-query="articleSearchQuery"
       v-model:article-category-filter="articleCategoryFilter"
       v-model:article-tag-filter="articleTagFilter"
       v-model:article-state-filter="articleStateFilter"
       v-model:draft-title="draftTitle"
+      v-model:draft-slug="draftSlug"
       v-model:draft-date="draftDate"
       v-model:draft-scheduled-at="draftScheduledAt"
       v-model:draft-category="draftCategory"
@@ -2890,8 +3143,8 @@ useSiteSeo({
       @export-backup="exportBackup('articles')"
     />
 
-    <AdminMediaPanel
-      v-show="activePanel === 'media'"
+    <LazyAdminMediaPanel
+      v-if="activePanel === 'media'"
       :media-assets="mediaAssets"
       :saving="saving"
       :uploading="mediaUploading"
@@ -2903,8 +3156,8 @@ useSiteSeo({
       @export-backup="exportBackup('media')"
     />
 
-    <AdminProjectsPanel
-      v-show="activePanel === 'projects'"
+    <LazyAdminProjectsPanel
+      v-if="activePanel === 'projects'"
       v-model:project-search-query="projectSearchQuery"
       v-model:project-status-filter="projectStatusFilter"
       v-model:project-category-filter="projectCategoryFilter"
@@ -2942,8 +3195,8 @@ useSiteSeo({
       @export-backup="exportBackup('projects')"
     />
 
-    <AdminFriendsPanel
-      v-show="activePanel === 'friends'"
+    <LazyAdminFriendsPanel
+      v-if="activePanel === 'friends'"
       v-model:friend-search-query="friendSearchQuery"
       v-model:friend-status-filter="friendStatusFilter"
       v-model:friend-name="friendName"
@@ -2976,8 +3229,8 @@ useSiteSeo({
       @export-backup="exportBackup('friends')"
     />
 
-    <AdminAboutPanel
-      v-show="activePanel === 'about'"
+    <LazyAdminAboutPanel
+      v-if="activePanel === 'about'"
       v-model:about-title="aboutTitle"
       v-model:about-description="aboutDescription"
       v-model:about-markdown="aboutMarkdown"
@@ -2989,8 +3242,8 @@ useSiteSeo({
       @export-backup="exportBackup('about')"
     />
 
-    <AdminCommentsPanel
-      v-show="activePanel === 'comments'"
+    <LazyAdminCommentsPanel
+      v-if="activePanel === 'comments'"
       v-model:comment-search-query="commentSearchQuery"
       v-model:comment-status-filter="commentStatusFilter"
       v-model:selected-comment-ids="selectedCommentIds"
@@ -3012,8 +3265,8 @@ useSiteSeo({
       @export-backup="exportBackup('comments')"
     />
 
-    <AdminNotificationsPanel
-      v-show="activePanel === 'notifications'"
+    <LazyAdminNotificationsPanel
+      v-if="activePanel === 'notifications'"
       v-model:notifications="managedNotifications"
       v-model:notification-settings="notificationSettings"
       :admin-notifications="adminNotifications"
@@ -3025,8 +3278,8 @@ useSiteSeo({
       @export-backup="exportBackup('notifications')"
     />
 
-    <AdminSeoPanel
-      v-show="activePanel === 'seo'"
+    <LazyAdminSeoPanel
+      v-if="activePanel === 'seo'"
       :articles="managedArticles"
       :projects="managedProjects"
       :friends="managedFriends"
@@ -3037,8 +3290,8 @@ useSiteSeo({
       }"
     />
 
-    <AdminBackupPanel
-      v-show="activePanel === 'backup'"
+    <LazyAdminBackupPanel
+      v-if="activePanel === 'backup'"
       :loading="backupLoading"
       :error="backupError"
       :result="backupRestoreResult"
@@ -3047,8 +3300,8 @@ useSiteSeo({
       @restore-backup="restoreBackup"
     />
 
-    <AdminLogsPanel
-      v-show="activePanel === 'logs'"
+    <LazyAdminLogsPanel
+      v-if="activePanel === 'logs'"
       :logs="adminLogs"
       :loading="logsLoading"
       :error="logsError"
@@ -3064,5 +3317,5 @@ useSiteSeo({
       @confirm="resolveAdminConfirmation(true)"
       @cancel="resolveAdminConfirmation(false)"
     />
-  </AdminFrame>
+  </div>
 </template>

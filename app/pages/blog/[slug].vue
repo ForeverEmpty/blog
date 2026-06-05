@@ -14,11 +14,12 @@ const { data: article, pending: articlePending, error: articleError } = await us
     watch: [articlePath],
   },
 );
-const { data: articleSiblings } = await useAsyncData("blog-siblings", () =>
+const { data: articleSiblings } = useLazyAsyncData("blog-siblings", () =>
   queryCollection("blog")
     .all(),
   {
     default: () => [],
+    deep: false,
   },
 );
 
@@ -30,7 +31,7 @@ const articleEmptyDescription = computed(() => (
     : "这篇文章可能尚未发布、已移除，或当前地址输入有误。"
 ));
 
-const { data: articleViewStats } = await useAsyncData(
+const { data: articleViewStats } = useLazyAsyncData(
   articleViewsDataKey,
   () => (
     hasArticle.value
@@ -45,6 +46,7 @@ const { data: articleViewStats } = await useAsyncData(
       slug: slug.value,
       views: Number(article.value?.views) || 0,
     }),
+    server: false,
     watch: [slug, hasArticle],
   },
 );

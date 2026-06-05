@@ -58,7 +58,7 @@ const tagFilterHref = (tag: string) => ({
     >
       <NuxtLink
         class="absolute inset-0 z-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-        :href="article.path"
+        :to="article.path"
         :aria-label="`阅读文章：${article.title}`"
       />
       <span class="pointer-events-none relative z-2 font-display text-[28px] text-quiet transition-colors duration-200 group-hover:text-paper group-focus-within:text-paper">
@@ -71,7 +71,7 @@ const tagFilterHref = (tag: string) => ({
           </p>
           <NuxtLink
             class="pointer-events-auto relative z-2 text-[13px] font-bold uppercase tracking-normal text-muted underline-offset-4 transition-colors duration-200 hover:underline group-hover:text-paper group-focus-within:text-paper"
-            :href="categoryFilterHref(article.category)"
+            :to="categoryFilterHref(article.category)"
             :aria-label="`筛选分类：${article.category || '未分类'}`"
           >
             <AppSearchHighlight :text="article.category || '未分类'" :terms="highlightTerms" />
@@ -121,7 +121,7 @@ const tagFilterHref = (tag: string) => ({
           >
             <NuxtLink
               class="pointer-events-auto block border border-line px-(--space-1) py-1 text-[12px] font-bold leading-none text-muted underline-offset-4 transition-colors duration-200 hover:underline group-hover:border-paper group-hover:text-paper group-focus-within:border-paper group-focus-within:text-paper"
-              :href="tagFilterHref(tag)"
+              :to="tagFilterHref(tag)"
               :aria-label="`筛选标签：${tag}`"
             >
               <AppSearchHighlight :text="tag" :terms="highlightTerms" />

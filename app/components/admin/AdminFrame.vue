@@ -124,6 +124,10 @@ const sessionDetail = computed(() => {
 
   return `${props.sessionStatus.username || 'admin'} · 剩余 ${formatSessionDuration(props.sessionStatus.secondsRemaining)} · ${formatSessionTime(props.sessionStatus.checkedAt)} 校验`
 })
+
+const getPanelHref = (panel: AdminPanel) => (
+  panel === 'overview' ? '/admin' : `/admin/${panel}`
+)
 </script>
 
 <template>
@@ -172,18 +176,18 @@ const sessionDetail = computed(() => {
           </div>
 
           <nav class="grid min-h-0 content-start overflow-y-auto border-b border-line max-[860px]:grid-cols-5 max-[860px]:overflow-visible max-[680px]:grid-cols-3 max-[460px]:grid-cols-2" aria-label="后台模块">
-            <button
+            <NuxtLink
               v-for="panel in panels"
               :key="panel.key"
-              type="button"
               class="group relative grid min-h-15 items-center gap-(--space-1) overflow-hidden border-0 border-b border-line bg-transparent text-left text-sm font-bold tracking-normal text-muted transition-[background-color,color,grid-template-columns,padding] duration-420 ease-[cubic-bezier(.16,1,.3,1)] hover:bg-code-surface hover:text-ink focus-visible:bg-code-surface focus-visible:text-ink focus-visible:outline-none max-[860px]:min-h-12 max-[860px]:grid-cols-[40px_minmax(0,1fr)] max-[860px]:px-(--space-2)"
               :class="[
                 activePanel === panel.key ? 'bg-ink! text-paper! hover:bg-ink! hover:text-paper! focus-visible:bg-ink! focus-visible:text-paper!' : '',
                 sidebarCollapsed ? 'grid-cols-[1fr] justify-items-center px-0' : 'grid-cols-[40px_minmax(0,1fr)] px-(--space-2)'
               ]"
+              :to="getPanelHref(panel.key)"
               :aria-label="panel.label"
+              :aria-current="activePanel === panel.key ? 'page' : undefined"
               :title="sidebarCollapsed ? panel.label : undefined"
-              @click="emit('selectPanel', panel.key)"
             >
               <span
                 class="grid h-10 w-10 place-items-center transition-[transform] duration-420 ease-[cubic-bezier(.16,1,.3,1)] max-[860px]:translate-x-0"
@@ -199,7 +203,7 @@ const sessionDetail = computed(() => {
               >
                 {{ panel.label }}
               </span>
-            </button>
+            </NuxtLink>
           </nav>
 
           <div class="grid min-w-0 gap-(--space-2) overflow-hidden p-(--space-2)" :class="sidebarCollapsed ? 'justify-items-center' : ''">

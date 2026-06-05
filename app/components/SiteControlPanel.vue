@@ -11,14 +11,26 @@ type SiteControlNotification = {
   enabled?: boolean
 }
 
+type SiteControlArticle = {
+  path: string
+  title: string
+  date: string
+}
+
 const props = withDefaults(defineProps<{
   notifications?: SiteControlNotification[]
+  articles?: SiteControlArticle[]
   adminHref: string
   adminLabel: string
   adminActive?: boolean
+  subscribeHref?: string
+  subscribeLabel?: string
 }>(), {
   notifications: () => [],
-  adminActive: false
+  articles: () => [],
+  adminActive: false,
+  subscribeHref: '/subscribe',
+  subscribeLabel: '订阅中心'
 })
 
 const route = useRoute()
@@ -28,11 +40,14 @@ const open = ref(false)
 const readingMode = ref(false)
 const readIds = ref<string[]>([])
 const dismissedIds = ref<string[]>([])
+const liveArticles = ref<SiteControlArticle[]>([])
 
 const readStorageKey = 'chankoblog-site-notifications-read'
 const dismissedStorageKey = 'chankoblog-site-notifications-dismissed'
 const readingModeStorageKey = 'chankoblog-reading-mode'
 const panelId = 'site-control-panel'
+const calendarToday = ref(formatDateKey(new Date()))
+const calendarWeekCount = 26
 
 const isArticlePage = computed(() => (
   route.path.startsWith('/blog/') &&
@@ -57,8 +72,125 @@ const controlBadgeCount = computed(() => unreadCount.value)
 const readingModeLabel = computed(() => (
   readingMode.value && isArticlePage.value ? '退出阅读模式' : '进入阅读模式'
 ))
+const subscribeActive = computed(() => route.path === props.subscribeHref)
+const calendarArticles = computed(() => (
+  liveArticles.value.length > 0 ? liveArticles.value : props.articles
+))
+const articleCountByDate = computed(() => {
+  const groups = new Map<string, SiteControlArticle[]>()
+
+  calendarArticles.value.forEach((article) => {
+    const dateKey = normalizeDateKey(article.date)
+
+    if (!dateKey) {
+      return
+    }
+
+    groups.set(dateKey, [...(groups.get(dateKey) || []), article])
+  })
+
+  return groups
+})
+const calendarAnchorDate = computed(() => {
+  const today = parseDateKey(calendarToday.value) || new Date()
+
+  return calendarArticles.value.reduce((anchor, article) => {
+    const articleDate = parseDateKey(normalizeDateKey(article.date))
+
+    return articleDate && articleDate > anchor ? articleDate : anchor
+  }, today)
+})
+const calendarDays = computed(() => {
+  const anchorDate = calendarAnchorDate.value
+  const end = new Date(anchorDate)
+
+  end.setDate(end.getDate() + (6 - end.getDay()))
+
+  const start = new Date(end)
+
+  start.setDate(end.getDate() - ((calendarWeekCount * 7) - 1))
+
+  return Array.from({ length: calendarWeekCount * 7 }, (_item, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+
+    const dateKey = formatDateKey(date)
+    const articles = articleCountByDate.value.get(dateKey) || []
+
+    return {
+      dateKey,
+      date,
+      day: date.getDay(),
+      week: Math.floor(index / 7),
+      articles,
+      count: articles.length,
+      active: date <= anchorDate
+    }
+  })
+})
+const calendarWeeks = computed(() => (
+  Array.from({ length: Math.ceil(calendarDays.value.length / 7) }, (_item, index) =>
+    calendarDays.value.slice(index * 7, index * 7 + 7)
+  )
+))
+const calendarMonths = computed(() => {
+  const months: Array<{ key: string, label: string, week: number }> = []
+
+  calendarDays.value.forEach((day) => {
+    if (day.date.getDate() !== 1) {
+      return
+    }
+
+    const key = `${day.date.getFullYear()}-${day.date.getMonth()}`
+
+    if (months.some((month) => month.key === key)) {
+      return
+    }
+
+    months.push({
+      key,
+      label: `${day.date.getMonth() + 1}月`,
+      week: day.week
+    })
+  })
+
+  return months
+})
+const calendarVisibleTotalArticles = computed(() => calendarArticles.value.length)
+const calendarActiveDays = computed(() => (
+  calendarDays.value.filter((day) => day.count > 0).length
+))
+const calendarMaxCount = computed(() => (
+  Math.max(1, ...calendarDays.value.map((day) => day.count))
+))
 
 const uniqueIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)))
+function parseDateKey(value: string) {
+  const timestamp = Date.parse(`${value}T00:00:00`)
+
+  return Number.isNaN(timestamp) ? null : new Date(timestamp)
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function normalizeDateKey(value: string) {
+  const trimmed = String(value || '').trim()
+  const dateOnly = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+  if (dateOnly) {
+    return `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}`
+  }
+
+  const timestamp = Date.parse(trimmed)
+
+  return Number.isNaN(timestamp) ? '' : formatDateKey(new Date(timestamp))
+}
 const readStoredIds = (key: string) => {
   if (!import.meta.client) {
     return []
@@ -93,6 +225,56 @@ const levelClasses = (level: SiteControlNotification['level']) => {
   }
 
   return 'border-line bg-code-surface text-muted'
+}
+const calendarCellClass = (count: number, active: boolean) => {
+  if (!active) {
+    return 'border-line/40 bg-paper/60'
+  }
+
+  if (count <= 0) {
+    return 'border-line bg-paper'
+  }
+
+  const ratio = count / calendarMaxCount.value
+
+  if (ratio >= 0.75) {
+    return 'border-ink bg-ink'
+  }
+
+  if (ratio >= 0.5) {
+    return 'border-ink/70 bg-ink/70'
+  }
+
+  if (ratio >= 0.25) {
+    return 'border-ink/45 bg-ink/45'
+  }
+
+  return 'border-ink/25 bg-ink/25'
+}
+const calendarCellTitle = (dateKey: string, articles: SiteControlArticle[]) => {
+  if (articles.length === 0) {
+    return `${dateKey} 没有发布文章`
+  }
+
+  const titles = articles.slice(0, 4).map((article) => `《${article.title}》`).join('、')
+  const suffix = articles.length > 4 ? ` 等 ${articles.length} 篇` : ''
+
+  return `${dateKey} 发布 ${articles.length} 篇：${titles}${suffix}`
+}
+const calendarDayHref = (dateKey: string) => (
+  `/blog?q=${encodeURIComponent(`date="${dateKey}"`)}`
+)
+const refreshCalendarArticles = async () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  try {
+    liveArticles.value = await $fetch<SiteControlArticle[]>('/api/blog/activity')
+    calendarToday.value = formatDateKey(new Date())
+  } catch {
+    liveArticles.value = []
+  }
 }
 const isInternalLink = (href: string) => (
   href.startsWith('/') &&
@@ -172,11 +354,14 @@ watch(open, async (isOpen) => {
     return
   }
 
+  await refreshCalendarArticles()
   await nextTick()
   panelRef.value?.focus()
 })
 
 onMounted(() => {
+  calendarToday.value = formatDateKey(new Date())
+  void refreshCalendarArticles()
   readIds.value = readStoredIds(readStorageKey)
   dismissedIds.value = readStoredIds(dismissedStorageKey)
   readingMode.value = localStorage.getItem(readingModeStorageKey) === '1' && isArticlePage.value
@@ -243,9 +428,9 @@ onBeforeUnmount(() => {
           </AppButton>
         </header>
 
-        <div class="grid max-h-[min(620px,calc(92vh-128px))] min-h-0 grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] max-[840px]:grid-cols-1">
+        <div class="grid max-h-[min(620px,calc(92vh-128px))] min-h-0 grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)] max-[840px]:grid-cols-1">
           <section class="grid min-h-0 border-r border-line max-[840px]:border-r-0 max-[840px]:border-b" aria-labelledby="site-control-notifications-title">
-            <header class="flex items-start justify-between gap-(--space-2) border-b border-line p-(--space-3)">
+            <header class="flex items-center justify-between gap-(--space-2) border-b border-line px-(--space-3) py-(--space-2)">
               <div class="grid gap-1">
                 <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
                   Notifications
@@ -257,7 +442,7 @@ onBeforeUnmount(() => {
               <button
                 v-if="visibleNotifications.length > 0"
                 type="button"
-                class="min-h-9 border border-line px-(--space-1) text-[12px] font-bold text-muted transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
+                class="min-h-8 border border-line px-(--space-1) text-[12px] font-bold text-muted transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
                 @click="markAllRead"
               >
                 全部已读
@@ -356,45 +541,125 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <aside class="grid content-start gap-(--space-3) overflow-auto p-(--space-3)" aria-label="控制操作">
-            <section class="grid gap-(--space-2) border border-line bg-code-surface p-(--space-2)" aria-label="阅读控制">
-              <div class="grid gap-1">
-                <h3 class="m-0 text-lg font-bold leading-tight text-ink">
-                  阅读模式
-                </h3>
-                <p class="m-0 text-sm leading-[1.6] text-muted">
-                  隐藏导航、评论和页脚，放宽正文并保留文章目录。
-                </p>
+          <aside class="grid min-h-0 content-between gap-(--space-3) overflow-auto p-(--space-3)" aria-label="控制操作">
+            <section class="grid gap-(--space-2) border border-line bg-code-surface p-(--space-2)" aria-labelledby="site-control-calendar-title">
+              <div class="flex items-start justify-between gap-(--space-2)">
+                <div class="grid gap-1">
+                  <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
+                    Writing Calendar
+                  </p>
+                  <h3 id="site-control-calendar-title" class="m-0 text-lg font-bold leading-tight text-ink">
+                    提交记录
+                  </h3>
+                </div>
+                <div class="grid justify-items-end text-right">
+                  <span class="text-xl font-bold leading-none text-ink">{{ calendarVisibleTotalArticles }}</span>
+                  <span class="text-[11px] font-bold uppercase tracking-normal text-muted">Articles</span>
+                </div>
               </div>
-              <button
-                type="button"
-                class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-token border px-(--space-1) text-sm font-bold transition-colors duration-200 focus-visible:outline-none"
-                :class="readingMode && isArticlePage ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper'"
-                :disabled="!isArticlePage"
-                :aria-pressed="readingMode && isArticlePage"
-                @click="toggleReadingMode"
-              >
-                <Icon :name="readingMode && isArticlePage ? 'lucide:book-open-check' : 'lucide:book-open'" mode="svg" class="h-4 w-4" aria-hidden="true" />
-                {{ readingModeLabel }}
-              </button>
-              <p v-if="!isArticlePage" class="m-0 border border-dashed border-line bg-paper p-(--space-2) text-sm text-muted">
-                打开任意文章后可启用阅读模式。
-              </p>
+
+              <div class="pb-1" aria-label="最近几个月文章发布热力图">
+                <div
+                  class="grid gap-0.5"
+                  :style="{ gridTemplateColumns: `repeat(${calendarWeeks.length}, minmax(0, 1fr))` }"
+                >
+                  <div
+                    v-for="month in calendarMonths"
+                    :key="month.key"
+                    class="row-start-1 whitespace-nowrap text-[10px] font-bold uppercase leading-none text-muted"
+                    :style="{ gridColumn: `${month.week + 1} / span 4` }"
+                  >
+                    {{ month.label }}
+                  </div>
+
+                  <div
+                    v-for="(week, weekIndex) in calendarWeeks"
+                    :key="weekIndex"
+                    class="row-start-2 grid grid-rows-7 gap-0.5"
+                  >
+                    <template v-for="day in week" :key="day.dateKey">
+                      <NuxtLink
+                        v-if="day.count > 0"
+                        class="block aspect-square min-h-2 rounded-[1px] border transition-[transform,box-shadow] duration-200 hover:scale-125 hover:shadow-[0_0_0_2px_var(--paper),0_0_0_3px_var(--ink)] focus-visible:scale-125 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--paper),0_0_0_3px_var(--ink)]"
+                        :class="calendarCellClass(day.count, day.active)"
+                        :title="calendarCellTitle(day.dateKey, day.articles)"
+                        :to="calendarDayHref(day.dateKey)"
+                        :aria-label="calendarCellTitle(day.dateKey, day.articles)"
+                        @click="closePanel"
+                      />
+                      <span
+                        v-else
+                        class="block aspect-square min-h-2 rounded-[1px] border"
+                        :class="calendarCellClass(day.count, day.active)"
+                        :title="calendarCellTitle(day.dateKey, day.articles)"
+                        :aria-label="calendarCellTitle(day.dateKey, day.articles)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-(--space-1) text-[12px] font-bold uppercase tracking-normal text-muted">
+                <span>{{ calendarActiveDays }} active days</span>
+                <span class="inline-flex items-center gap-1">
+                  Less
+                  <span class="inline-flex h-3 w-3 rounded-[2px] border border-line bg-paper" aria-hidden="true" />
+                  <span class="inline-flex h-3 w-3 rounded-[2px] border border-ink/25 bg-ink/25" aria-hidden="true" />
+                  <span class="inline-flex h-3 w-3 rounded-[2px] border border-ink/45 bg-ink/45" aria-hidden="true" />
+                  <span class="inline-flex h-3 w-3 rounded-[2px] border border-ink/70 bg-ink/70" aria-hidden="true" />
+                  <span class="inline-flex h-3 w-3 rounded-[2px] border border-ink bg-ink" aria-hidden="true" />
+                  More
+                </span>
+              </div>
             </section>
 
-            <section class="grid gap-(--space-2) border border-line bg-code-surface p-(--space-2)" aria-label="后台访问">
-              <div class="grid gap-1">
-                <h3 class="m-0 text-lg font-bold leading-tight text-ink">
-                  后台访问
-                </h3>
-                <p class="m-0 text-sm leading-[1.6] text-muted">
-                  进入内容、项目、友链和通知管理。
-                </p>
+            <section class="grid gap-(--space-2)" aria-label="快捷控制">
+              <div class="grid grid-cols-3 gap-(--space-2) max-[560px]:grid-cols-1">
+                <button
+                  type="button"
+                  class="grid min-h-28 content-center justify-items-center gap-2 border p-(--space-2) text-center transition-colors duration-200 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+                  :class="readingMode && isArticlePage ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper'"
+                  :disabled="!isArticlePage"
+                  :aria-pressed="readingMode && isArticlePage"
+                  @click="toggleReadingMode"
+                >
+                  <Icon :name="readingMode && isArticlePage ? 'lucide:book-open-check' : 'lucide:book-open'" mode="svg" class="h-7 w-7" aria-hidden="true" />
+                  <span class="text-sm font-bold leading-tight">{{ readingModeLabel }}</span>
+                  <span class="text-[11px] font-bold uppercase tracking-normal opacity-70">
+                    Reader
+                  </span>
+                </button>
+
+                <NuxtLink
+                  class="group grid min-h-28 content-center justify-items-center gap-2 border p-(--space-2) text-center transition-colors duration-200 focus-visible:outline-none"
+                  :class="subscribeActive ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper'"
+                  :to="props.subscribeHref"
+                  @click="closePanel"
+                >
+                  <Icon name="lucide:rss" mode="svg" class="h-7 w-7 transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper" aria-hidden="true" />
+                  <span class="text-sm font-bold leading-tight transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">{{ props.subscribeLabel }}</span>
+                  <span class="text-[11px] font-bold uppercase tracking-normal opacity-70 transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">
+                    Subscribe
+                  </span>
+                </NuxtLink>
+
+                <NuxtLink
+                  class="group grid min-h-28 content-center justify-items-center gap-2 border p-(--space-2) text-center transition-colors duration-200 focus-visible:outline-none"
+                  :class="props.adminActive ? 'border-ink bg-ink text-paper' : 'border-line bg-paper text-ink hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper'"
+                  :to="props.adminHref"
+                  @click="closePanel"
+                >
+                  <Icon name="lucide:shield" mode="svg" class="h-7 w-7 transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper" aria-hidden="true" />
+                  <span class="text-sm font-bold leading-tight transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">{{ props.adminLabel }}</span>
+                  <span class="text-[11px] font-bold uppercase tracking-normal opacity-70 transition-colors duration-200 group-hover:text-paper group-focus-visible:text-paper">
+                    Admin
+                  </span>
+                </NuxtLink>
               </div>
-              <AppLinkButton class="w-full justify-center" :href="props.adminHref" variant="outline" :active="props.adminActive" @click="closePanel">
-                <Icon name="lucide:shield" mode="svg" class="h-4 w-4" aria-hidden="true" />
-                {{ props.adminLabel }}
-              </AppLinkButton>
+
+              <p v-if="!isArticlePage" class="m-0 border border-dashed border-line bg-code-surface p-(--space-2) text-sm leading-[1.6] text-muted">
+                打开任意文章后可启用阅读模式。
+              </p>
             </section>
           </aside>
         </div>

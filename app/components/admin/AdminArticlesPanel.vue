@@ -44,6 +44,7 @@ const articleCategoryFilter = defineModel<string>('articleCategoryFilter', { req
 const articleTagFilter = defineModel<string>('articleTagFilter', { required: true })
 const articleStateFilter = defineModel<string>('articleStateFilter', { required: true })
 const draftTitle = defineModel<string>('draftTitle', { required: true })
+const draftSlug = defineModel<string>('draftSlug', { required: true })
 const draftDate = defineModel<string>('draftDate', { required: true })
 const draftScheduledAt = defineModel<string>('draftScheduledAt', { required: true })
 const draftCategory = defineModel<string>('draftCategory', { required: true })
@@ -166,14 +167,18 @@ const emitWorkflowStatusChange = (article: ManagedArticle, event: Event) => {
   emit('setArticleWorkflowStatus', article, target.value as ArticleWorkflowStatus)
 }
 const visibleVersions = computed(() => (
-  props.articleVersions
-    .filter((version) => !selectedArticleSlug.value || version.slug === selectedArticleSlug.value)
-    .slice(0, 8)
+  props.selectedArticleId === 'new'
+    ? []
+    : props.articleVersions
+      .filter((version) => selectedArticleSlug.value && version.slug === selectedArticleSlug.value)
+      .slice(0, 8)
 ))
 const visibleAutosaves = computed(() => (
-  props.articleAutosaves
-    .filter((autosave) => !selectedArticleSlug.value || autosave.slug === selectedArticleSlug.value)
-    .slice(0, 6)
+  props.selectedArticleId === 'new'
+    ? []
+    : props.articleAutosaves
+      .filter((autosave) => selectedArticleSlug.value && autosave.slug === selectedArticleSlug.value)
+      .slice(0, 6)
 ))
 const publishCheckStats = computed(() => ({
   errors: props.publishChecks.filter((check) => check.severity === 'error').length,
@@ -198,6 +203,18 @@ const parseDraftTags = (value: string) => (
     .filter(Boolean)
 )
 const draftTagList = computed(() => parseDraftTags(draftTags.value))
+const normalizeDraftSlugInput = (value: string) => (
+  value
+    .trim()
+    .replace(/\.md$/i, '')
+    .toLowerCase()
+    .replace(/['"]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'new-article'
+)
+const normalizeDraftSlugField = () => {
+  draftSlug.value = normalizeDraftSlugInput(draftSlug.value)
+}
 
 const normalizeMarkdownTemplate = (value: unknown): MarkdownTemplate | null => {
   if (!value || typeof value !== 'object') {
@@ -1222,10 +1239,25 @@ onBeforeUnmount(() => {
 
     <section class="grid min-h-0 gap-(--space-3)" aria-label="文章编辑器">
       <div class="grid gap-(--space-2)">
-        <div class="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-(--space-2) max-[720px]:grid-cols-1">
+        <div class="grid grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)_220px] items-start gap-(--space-2) max-[980px]:grid-cols-2 max-[720px]:grid-cols-1">
           <label class="grid content-start gap-2 text-sm font-bold text-muted">
             标题
             <input v-model="draftTitle" class="h-12 border border-line bg-paper px-(--space-2) text-base text-ink outline-none focus:border-ink">
+          </label>
+          <label class="grid content-start gap-2 text-sm font-bold text-muted">
+            文件名
+            <span class="grid grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                v-model="draftSlug"
+                class="h-12 min-w-0 border border-line bg-paper px-(--space-2) font-mono text-sm text-ink outline-none focus:border-ink"
+                placeholder="article-slug"
+                spellcheck="false"
+                @blur="normalizeDraftSlugField"
+              >
+              <span class="inline-flex h-12 items-center border-y border-r border-line bg-code-surface px-(--space-1) font-mono text-sm font-bold text-muted">
+                .md
+              </span>
+            </span>
           </label>
           <label class="grid content-start gap-2 text-sm font-bold text-muted">
             发布日期

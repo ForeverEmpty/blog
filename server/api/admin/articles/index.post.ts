@@ -9,7 +9,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const slug = typeof body.slug === 'string' && body.slug ? body.slug : slugify(body.title)
-  const existing = await readArticle(slug).catch(() => null)
+  assertSafeSlug(slug)
+
+  const previousSlug = typeof body.previousSlug === 'string' && body.previousSlug ? body.previousSlug : slug
+  assertSafeSlug(previousSlug)
+
+  const existing = await readArticle(previousSlug).catch(() => null)
+
+  if (previousSlug !== slug) {
+    const conflictingArticle = await readArticle(slug).catch(() => null)
+
+    if (conflictingArticle) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Article filename already exists'
+      })
+    }
+  }
 
   if (existing) {
     await createArticleVersion(existing, 'article.update')
@@ -17,10 +33,12 @@ export default defineEventHandler(async (event) => {
 
   const article = await saveArticle({
     ...body,
+    id: previousSlug,
     slug
   })
   const audit = createAdminAuditTrail(existing || undefined, article, [
     { key: 'title', label: '标题' },
+    { key: 'slug', label: '文件名' },
     { key: 'description', label: '摘要' },
     { key: 'date', label: '发布日期' },
     { key: 'scheduledAt', label: '定时时间' },
@@ -35,8 +53,11 @@ export default defineEventHandler(async (event) => {
   ])
 
   await deleteArticleAutosave(article.slug)
+  if (previousSlug !== article.slug) {
+    await deleteArticleAutosave(previousSlug)
+  }
   await writeAdminLog({
-    action: existing ? 'article.update' : 'article.create',
+    action: existing ? (previousSlug === article.slug ? 'article.update' : 'article.rename') : 'article.create',
     targetType: 'article',
     targetId: article.slug,
     message: appendAuditSummary(existing ? `更新文章：${article.title}` : `新增文章：${article.title}`, audit),

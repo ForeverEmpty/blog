@@ -22,6 +22,12 @@ type LayoutNotification = {
   enabled?: boolean
 }
 
+type LayoutCalendarArticle = {
+  path: string
+  title: string
+  date: string
+}
+
 const appConfig = useAppConfig()
 const { isActiveNavigation } = useActiveNavigation()
 const searchOpen = ref(false)
@@ -37,6 +43,21 @@ const sortedSiteSearchArticles = computed(() => (
   sortArticles(siteSearchArticles.value)
     .filter(isPublicArticle)
     .map(withContentSearchText)
+))
+const { data: siteCalendarArticles } = await useAsyncData('site-calendar-articles', () =>
+  $fetch<LayoutCalendarArticle[]>('/api/blog/activity'),
+  {
+    default: () => []
+  }
+)
+const controlPanelArticles = computed(() => (
+  siteCalendarArticles.value.length > 0
+    ? siteCalendarArticles.value
+    : sortedSiteSearchArticles.value.map((article) => ({
+        path: article.path,
+        title: article.title,
+        date: article.date
+      }))
 ))
 const { data: siteSearchProjects } = await useAsyncData('site-search-projects', () =>
   $fetch<LayoutSearchProject[]>('/api/projects'),
@@ -59,11 +80,17 @@ const { data: siteNotifications } = await useAsyncData('site-notifications', () 
       aria-label="站点导航"
     >
       <NuxtLink
-        class="inline-flex min-h-11 w-11 items-center justify-center rounded-token border border-ink font-display text-lg tracking-normal"
+        class="inline-flex min-h-11 w-11 items-center justify-center rounded-token bg-transparent p-0.5"
         :to="appConfig.site.homeHref"
         :aria-label="appConfig.site.homeAriaLabel"
       >
-        {{ appConfig.site.initials }}
+        <img
+          src="/favicon.svg"
+          :alt="appConfig.site.name"
+          class="h-10 w-10 object-contain"
+          width="40"
+          height="40"
+        >
       </NuxtLink>
       <nav class="flex flex-wrap gap-(--space-2) text-sm text-muted max-[760px]:order-3 max-[760px]:col-span-full max-[760px]:grid max-[760px]:grid-cols-3 max-[760px]:gap-1 max-[380px]:grid-cols-2" aria-label="主导航">
         <AppLinkButton
@@ -89,9 +116,12 @@ const { data: siteNotifications } = await useAsyncData('site-notifications', () 
         <ThemeModeToggle class="justify-self-end" />
         <SiteControlPanel
           :notifications="siteNotifications"
+          :articles="controlPanelArticles"
           :admin-href="appConfig.navigation.admin.href"
           :admin-label="appConfig.navigation.admin.label"
           :admin-active="isActiveNavigation(appConfig.navigation.admin.href)"
+          subscribe-href="/subscribe"
+          :subscribe-label="`${appConfig.subscribe.title}中心`"
         />
       </div>
     </header>

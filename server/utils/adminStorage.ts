@@ -534,12 +534,33 @@ export const readArticle = async (slug: string) => {
 
 export const saveArticle = async (payload: Partial<AdminArticle> & { slug?: string; title: string }) => {
   const slug = payload.slug ? payload.slug : slugify(payload.title)
-  const existing = await readFile(articleFilePath(slug), 'utf8')
+  const previousSlug = typeof payload.id === 'string' && payload.id ? payload.id : slug
+  assertSafeSlug(previousSlug)
+
+  if (previousSlug !== slug) {
+    const conflictingArticle = await readFile(articleFilePath(slug), 'utf8')
+      .then((raw) => parseArticleMarkdown(raw, slug))
+      .catch(() => null)
+
+    if (conflictingArticle) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Article filename already exists'
+      })
+    }
+  }
+
+  const existing = await readFile(articleFilePath(previousSlug), 'utf8')
+    .then((raw) => parseArticleMarkdown(raw, previousSlug))
+    .catch(() => null)
+  const sameSlugExisting = previousSlug === slug
+    ? existing
+    : await readFile(articleFilePath(slug), 'utf8')
     .then((raw) => parseArticleMarkdown(raw, slug))
     .catch(() => null)
 
   const payloadScheduledAt = payload.workflowStatus === 'scheduled'
-    ? normalizeScheduledAt(payload.scheduledAt || existing?.scheduledAt)
+    ? normalizeScheduledAt(payload.scheduledAt || existing?.scheduledAt || sameSlugExisting?.scheduledAt)
     : undefined
   const workflowStatus = resolveArticleWorkflowStatus(payload.workflowStatus, payload.published, payloadScheduledAt)
   const scheduledAt = workflowStatus === 'scheduled' ? payloadScheduledAt : undefined
@@ -551,19 +572,23 @@ export const saveArticle = async (payload: Partial<AdminArticle> & { slug?: stri
     description: payload.description || '',
     date: payload.date || new Date().toISOString().slice(0, 10),
     scheduledAt,
-    author: payload.author || existing?.author || 'Chanko',
-    authorUrl: payload.authorUrl || existing?.authorUrl || '/about',
+    author: payload.author || existing?.author || sameSlugExisting?.author || 'Chanko',
+    authorUrl: payload.authorUrl || existing?.authorUrl || sameSlugExisting?.authorUrl || '/about',
     category: payload.category || '未分类',
     workflowStatus,
     published: isArticleMarkedPublished(workflowStatus),
     locked: payload.locked === true,
     pinned: payload.pinned === true,
-    views: Math.max(0, Number(payload.views ?? existing?.views ?? 0)),
+    views: Math.max(0, Number(payload.views ?? existing?.views ?? sameSlugExisting?.views ?? 0)),
     tags: Array.isArray(payload.tags) ? payload.tags.map(String) : [],
     markdown: payload.markdown || ''
   }
 
   await writeFile(articleFilePath(slug), stringifyArticleMarkdown(article), 'utf8')
+
+  if (previousSlug !== slug && existing) {
+    await unlink(articleFilePath(previousSlug)).catch(() => {})
+  }
 
   return article
 }

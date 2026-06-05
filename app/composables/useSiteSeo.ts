@@ -43,25 +43,25 @@ export const useSiteSeo = (options: SiteSeoOptions = {}) => {
   const canonicalPath = options.path || route.path || '/'
   const canonicalUrl = useAbsoluteSiteUrl(canonicalPath)
   const imageUrl = useAbsoluteSiteUrl(options.image || appConfig.seo.defaultImage || '/favicon.ico')
-  const title = options.title || appConfig.seo.defaultTitle || appConfig.site.name
-  const fullTitle = options.title
-    ? String(appConfig.seo.titleTemplate || `%s - ${appConfig.site.name}`).replace('%s', title)
-    : title
+  const siteTitle = appConfig.site.name
+  const defaultTitle = appConfig.seo.defaultTitle || siteTitle
+  const title = options.title || defaultTitle
+  const shouldUsePlainTitle = title === siteTitle || title === defaultTitle
   const description = options.description || appConfig.site.description
   const robots = options.noindex ? 'noindex,nofollow' : 'index,follow'
 
   useSeoMeta({
-    title: fullTitle,
+    title,
     description,
     robots,
-    ogTitle: fullTitle,
+    ogTitle: title,
     ogDescription: description,
     ogUrl: canonicalUrl,
     ogType: options.type || 'website',
     ogSiteName: appConfig.site.name,
     ogImage: imageUrl,
     twitterCard: 'summary_large_image',
-    twitterTitle: fullTitle,
+    twitterTitle: title,
     twitterDescription: description,
     twitterImage: imageUrl
   })
@@ -70,6 +70,7 @@ export const useSiteSeo = (options: SiteSeoOptions = {}) => {
     htmlAttrs: {
       lang: appConfig.site.locale || 'zh-CN'
     },
+    titleTemplate: shouldUsePlainTitle ? '%s' : undefined,
     link: [
       {
         rel: 'canonical',
@@ -113,7 +114,7 @@ export const useSiteSeo = (options: SiteSeoOptions = {}) => {
   return {
     canonicalUrl,
     imageUrl,
-    title: fullTitle,
+    title,
     description
   }
 }

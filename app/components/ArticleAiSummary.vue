@@ -17,11 +17,13 @@ const isTypingSummary = ref(false)
 let typewriterFrame: number | undefined
 let typewriterStartedAt = 0
 
-const { data, pending, error, refresh } = await useFetch<ArticleSummary>(
+const { data, pending, error, refresh } = useFetch<ArticleSummary>(
   () => `/api/blog/${encodeURIComponent(props.slug)}/summary`,
   {
     immediate: appConfig.aiSummary.enabled,
-    key: `article-ai-summary-${props.slug}`
+    key: `article-ai-summary-${props.slug}`,
+    lazy: true,
+    server: false,
   }
 )
 
