@@ -335,6 +335,31 @@ const handleDocumentClick = (event: MouseEvent) => {
 
   closePanel()
 }
+const isEditableShortcutTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]'))
+}
+const handleDocumentKeydown = (event: KeyboardEvent) => {
+  if (
+    event.repeat ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    !event.shiftKey ||
+    !isArticlePage.value ||
+    event.key.toLowerCase() !== 'r' ||
+    isEditableShortcutTarget(event.target)
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  toggleReadingMode()
+}
 
 watch(
   () => route.path,
@@ -367,11 +392,13 @@ onMounted(() => {
   readingMode.value = localStorage.getItem(readingModeStorageKey) === '1' && isArticlePage.value
   syncReadingModeClass()
   document.addEventListener('click', handleDocumentClick)
+  document.addEventListener('keydown', handleDocumentKeydown)
 })
 
 onBeforeUnmount(() => {
   document.documentElement.classList.remove('reader-mode')
   document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 </script>
 
@@ -429,9 +456,9 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="grid max-h-[min(620px,calc(92vh-128px))] min-h-0 grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)] max-[840px]:grid-cols-1">
-          <section class="grid min-h-0 border-r border-line max-[840px]:border-r-0 max-[840px]:border-b" aria-labelledby="site-control-notifications-title">
-            <header class="flex items-center justify-between gap-(--space-2) border-b border-line px-(--space-3) py-(--space-2)">
-              <div class="grid gap-1">
+          <section class="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-r border-line max-[840px]:border-r-0 max-[840px]:border-b" aria-labelledby="site-control-notifications-title">
+            <header class="grid min-h-[72px] grid-cols-[minmax(0,1fr)_72px] items-center gap-(--space-2) border-b border-line px-(--space-3) py-(--space-2)">
+              <div class="grid min-w-0 gap-1">
                 <p class="m-0 text-[12px] font-bold uppercase tracking-normal text-muted">
                   Notifications
                 </p>
@@ -439,14 +466,16 @@ onBeforeUnmount(() => {
                   站内通知
                 </h3>
               </div>
-              <button
-                v-if="visibleNotifications.length > 0"
-                type="button"
-                class="min-h-8 border border-line px-(--space-1) text-[12px] font-bold text-muted transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
-                @click="markAllRead"
-              >
-                全部已读
-              </button>
+              <div class="flex min-h-8 justify-end">
+                <button
+                  v-if="visibleNotifications.length > 0"
+                  type="button"
+                  class="min-h-8 border border-line px-(--space-1) text-[12px] font-bold text-muted transition-colors duration-200 hover:bg-ink hover:text-paper focus-visible:bg-ink focus-visible:text-paper focus-visible:outline-none"
+                  @click="markAllRead"
+                >
+                  全部已读
+                </button>
+              </div>
             </header>
 
             <div class="min-h-0 overflow-auto">
@@ -626,7 +655,7 @@ onBeforeUnmount(() => {
                   <Icon :name="readingMode && isArticlePage ? 'lucide:book-open-check' : 'lucide:book-open'" mode="svg" class="h-7 w-7" aria-hidden="true" />
                   <span class="text-sm font-bold leading-tight">{{ readingModeLabel }}</span>
                   <span class="text-[11px] font-bold uppercase tracking-normal opacity-70">
-                    Reader
+                    Shift + R
                   </span>
                 </button>
 

@@ -426,7 +426,7 @@ useSiteSeo({
           @click.self="closeApplyDialog"
         >
           <form
-            class="dialog-panel grid max-h-[min(760px,92vh)] w-full max-w-220 overflow-hidden border border-line bg-paper text-ink"
+            class="dialog-panel grid max-h-[min(760px,92vh)] w-full max-w-220 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border border-line bg-paper text-ink"
             :class="applySubmitted ? 'max-w-150' : ''"
             @submit.prevent="submitFriendApplication"
           >
