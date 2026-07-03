@@ -44,6 +44,9 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.21.0
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@5.9.3)(vue@3.5.34(typescript@5.9.3))
       vue:
         specifier: ^3.5.34
         version: 3.5.34(typescript@5.9.3)

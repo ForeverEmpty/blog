@@ -1,7 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineNuxtConfig({
+  alias: {
+    pinia: fileURLToPath(new URL("./node_modules/pinia/dist/pinia.mjs", import.meta.url)),
+  },
   compatibilityDate: "2025-07-15",
   css: ["~/assets/css/index.css"],
   devtools: { enabled: true },
