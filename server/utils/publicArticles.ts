@@ -2,9 +2,6 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { parseMarkdown } from '@nuxtjs/mdc/runtime'
-import { fromHast } from 'minimark/hast'
-
 import { isArticlePublic, readArticle, readArticles } from './adminStorage'
 import type { AdminArticle } from './adminStorage'
 
@@ -275,20 +272,12 @@ export const readPublicArticle = async (slug: string): Promise<PublicArticle | n
 
   const signature = createArticleSignature(article)
 
-  const parsed = await parseMarkdown(
+  const { body } = await parseMarkdownBody(
     article.markdown,
     {
-      toc: {
-        depth: 3,
-        searchDepth: 3,
-      },
-    },
-    {
-      fileOptions: {
-        id: `${article.slug}.md`,
-        path: article.path,
-        body: article.markdown,
-      },
+      id: `${article.slug}.md`,
+      path: article.path,
+      body: article.markdown,
     },
   )
 
@@ -296,10 +285,7 @@ export const readPublicArticle = async (slug: string): Promise<PublicArticle | n
     ...article,
     markdown: stripMarkdownForSearch(article.markdown),
     contentText: stripMarkdownForSearch(article.markdown),
-    body: {
-      ...fromHast(parsed.body),
-      toc: parsed.toc,
-    },
+    body,
   }
 
   publicArticleDetailCache.set(slug, {

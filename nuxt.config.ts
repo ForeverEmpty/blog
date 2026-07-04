@@ -121,6 +121,28 @@ export default defineNuxtConfig({
     credits: false,
     cacheMaxAgeSeconds: 900,
   },
+  mdc: {
+    highlight: {
+      noApiRoute: true,
+      theme: {
+        default: "github-light",
+        dark: "github-dark",
+      },
+      langs: [
+        "bash",
+        "css",
+        "html",
+        "js",
+        "json",
+        "md",
+        "mdc",
+        "ts",
+        "tsx",
+        "vue",
+        "yaml",
+      ],
+    },
+  },
   ogImage: {
     enabled: false,
   },

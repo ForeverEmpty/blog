@@ -43,13 +43,18 @@ const foldLabel = computed(() => {
 const foldIcon = computed(() => (isFolded.value ? 'lucide:chevrons-down' : 'lucide:chevrons-up'))
 const codeFrameClass = computed(() => (
   isFolded.value
-    ? 'max-h-[32rem] overflow-hidden'
-    : 'max-h-[min(72vh,52rem)] overflow-auto'
+    ? 'max-h-[18rem]'
+    : 'max-h-[min(72vh,52rem)]'
+))
+const codeScrollerClass = computed(() => (
+  isFolded.value
+    ? 'overflow-x-auto overflow-y-hidden'
+    : 'overflow-auto'
 ))
 
 const preClass = computed(() => [
   props.class,
-  'm-0 min-w-0 overflow-x-auto bg-code-surface p-(--space-3) font-mono text-[15px] leading-[1.7] text-code-text [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:font-mono [&_code]:text-inherit [&_code_.line]:block'
+  'm-0 min-w-max bg-code-surface p-(--space-3) font-mono text-[15px] leading-[1.7] text-code-text [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:font-mono [&_code]:text-inherit [&_code_.line]:block'
 ])
 
 const toggleFold = () => {
@@ -118,28 +123,33 @@ onBeforeUnmount(() => {
     <div>
       <div
         :id="codeBlockId"
-        class="relative grid grid-cols-[auto_minmax(0,1fr)] bg-code-surface transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
+        class="relative overflow-hidden bg-code-surface transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
         :class="codeFrameClass"
       >
         <div
-          class="select-none border-r border-code-border px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"
-          aria-hidden="true"
+          class="grid max-h-[inherit] grid-cols-[auto_minmax(max-content,1fr)]"
+          :class="codeScrollerClass"
         >
-          <span
-            v-for="line in lineNumbers"
-            :key="line"
-            class="block min-w-6"
+          <div
+            class="sticky left-0 z-10 select-none border-r border-code-border bg-code-surface px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"
+            aria-hidden="true"
           >
-            {{ line }}
-          </span>
+            <span
+              v-for="line in lineNumbers"
+              :key="line"
+              class="block min-w-6"
+            >
+              {{ line }}
+            </span>
+          </div>
+          <pre
+            ref="preElement"
+            :class="preClass"
+          ><slot /></pre>
         </div>
-        <pre
-          ref="preElement"
-          :class="preClass"
-        ><slot /></pre>
         <div
           v-if="isFolded"
-          class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-code-surface"
+          class="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-18 bg-linear-to-b from-transparent to-code-surface"
           aria-hidden="true"
         />
       </div>
@@ -167,28 +177,33 @@ onBeforeUnmount(() => {
   >
     <div
       :id="codeBlockId"
-      class="relative grid grid-cols-[auto_minmax(0,1fr)] transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
+      class="relative overflow-hidden bg-code-surface transition-[max-height] duration-300 ease-[cubic-bezier(.16,1,.3,1)]"
       :class="codeFrameClass"
     >
       <div
-        class="select-none border-r border-code-border px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"
-        aria-hidden="true"
+        class="grid max-h-[inherit] grid-cols-[auto_minmax(max-content,1fr)]"
+        :class="codeScrollerClass"
       >
-        <span
-          v-for="line in lineNumbers"
-          :key="line"
-          class="block min-w-6"
+        <div
+          class="sticky left-0 z-10 select-none border-r border-code-border bg-code-surface px-(--space-2) py-(--space-3) text-right font-mono text-[15px] leading-[1.7] text-muted"
+          aria-hidden="true"
         >
-          {{ line }}
-        </span>
+          <span
+            v-for="line in lineNumbers"
+            :key="line"
+            class="block min-w-6"
+          >
+            {{ line }}
+          </span>
+        </div>
+        <pre
+          ref="preElement"
+          :class="preClass"
+        ><slot /></pre>
       </div>
-      <pre
-        ref="preElement"
-        :class="preClass"
-      ><slot /></pre>
       <div
         v-if="isFolded"
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-code-surface"
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-18 bg-linear-to-b from-transparent to-code-surface"
         aria-hidden="true"
       />
     </div>

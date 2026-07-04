@@ -1,8 +1,5 @@
 import { createHash } from 'node:crypto'
 
-import { parseMarkdown } from '@nuxtjs/mdc/runtime'
-import { fromHast } from 'minimark/hast'
-
 import { readAboutPage } from './adminStorage'
 
 type PublicAboutPage = Awaited<ReturnType<typeof readAboutPage>> & {
@@ -45,29 +42,18 @@ export const readPublicAboutPage = async () => {
     return publicAboutCache.page
   }
 
-  const parsed = await parseMarkdown(
+  const { body } = await parseMarkdownBody(
     about.markdown,
     {
-      toc: {
-        depth: 3,
-        searchDepth: 3,
-      },
-    },
-    {
-      fileOptions: {
-        id: 'about.md',
-        path: '/about',
-        body: about.markdown,
-      },
+      id: 'about.md',
+      path: '/about',
+      body: about.markdown,
     },
   )
   const page = {
     ...about,
     path: '/about',
-    body: {
-      ...fromHast(parsed.body),
-      toc: parsed.toc,
-    },
+    body,
   }
 
   publicAboutCache = {
