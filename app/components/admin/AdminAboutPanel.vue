@@ -491,6 +491,12 @@ const getMarkdownLineAtCursor = (textarea: HTMLTextAreaElement) => {
   return textarea.value.slice(0, cursorIndex).split('\n').length
 }
 
+const getMarkdownLineAtEditorScroll = (textarea: HTMLTextAreaElement) => {
+  const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 26
+
+  return Math.max(1, Math.floor(textarea.scrollTop / lineHeight) + 1)
+}
+
 const getMarkdownBlockIndexAtLine = (line: number) => {
   const blocks = markdownPreviewBlocks.value
   const exactIndex = blocks.findIndex((block) => line >= block.startLine && line <= block.endLine)
@@ -511,7 +517,7 @@ const getMarkdownBlockIndexAtLine = (line: number) => {
 }
 
 const getPreviewBlockElements = (preview: HTMLElement) => {
-  const contentRoot = preview.querySelector<HTMLElement>('[data-content-id]')
+  const contentRoot = preview.querySelector<HTMLElement>('[data-content-id], [data-content-body]')
 
   if (!contentRoot) {
     return []
@@ -525,20 +531,18 @@ const getPreviewBlockElements = (preview: HTMLElement) => {
   ))
 }
 
-const syncPreviewToMarkdownCursor = () => {
+const syncPreviewToMarkdownLine = (line: number) => {
   if (!import.meta.client) {
     return
   }
 
-  const textarea = markdownTextarea.value
   const preview = previewScroller.value
 
-  if (!textarea || !preview) {
+  if (!preview) {
     return
   }
 
-  const cursorLine = getMarkdownLineAtCursor(textarea)
-  const markdownBlockIndex = getMarkdownBlockIndexAtLine(cursorLine)
+  const markdownBlockIndex = getMarkdownBlockIndexAtLine(line)
   const previewBlocks = getPreviewBlockElements(preview)
 
   if (markdownBlockIndex < 0 || previewBlocks.length === 0) {
@@ -561,9 +565,37 @@ const syncPreviewToMarkdownCursor = () => {
   preview.scrollTop = Math.min(maxPreviewScroll, Math.max(0, targetScrollTop))
 }
 
+const syncPreviewToMarkdownCursor = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const textarea = markdownTextarea.value
+
+  if (!textarea) {
+    return
+  }
+
+  syncPreviewToMarkdownLine(getMarkdownLineAtCursor(textarea))
+}
+
 const syncPreviewAfterCursorMove = async () => {
   await nextTick()
   syncPreviewToMarkdownCursor()
+}
+
+const syncPreviewAfterEditorScroll = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const textarea = markdownTextarea.value
+
+  if (!textarea) {
+    return
+  }
+
+  syncPreviewToMarkdownLine(getMarkdownLineAtEditorScroll(textarea))
 }
 
 const scrollEditorIntoView = () => {
@@ -790,6 +822,7 @@ onBeforeUnmount(() => {
           @keyup="syncPreviewAfterCursorMove"
           @input="syncPreviewAfterCursorMove"
           @select="syncPreviewAfterCursorMove"
+          @scroll="syncPreviewAfterEditorScroll"
         />
       </section>
 
