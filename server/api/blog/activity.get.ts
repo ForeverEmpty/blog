@@ -1,10 +1,9 @@
-import { isArticlePublic, readArticles } from '../../utils/adminStorage'
+export default defineEventHandler(async (event) => {
+  setHeader(event, 'cache-control', 'private, max-age=0, must-revalidate')
 
-export default defineEventHandler(async () => {
-  const articles = await readArticles()
+  const articles = await readPublicArticles()
 
   return articles
-    .filter(isArticlePublic)
     .map((article) => ({
       path: article.path,
       title: article.title,

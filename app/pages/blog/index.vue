@@ -5,8 +5,7 @@ const router = useRouter();
 const { searchContentItems } = useArticleSearch();
 
 const { data: articles } = await useAsyncData("blog-list", () =>
-  queryCollection("blog")
-    .all(),
+  $fetch("/api/blog?search=1"),
   {
     default: () => [],
   },

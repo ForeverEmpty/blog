@@ -16,6 +16,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const article = await saveArticle(version)
+  await upsertPublicArticleIndex(article)
+  invalidatePublicArticleCache(article.slug)
 
   await deleteArticleAutosave(article.slug)
   await writeAdminLog({

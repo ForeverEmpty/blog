@@ -36,6 +36,10 @@ export default defineEventHandler(async (event) => {
     id: previousSlug,
     slug
   })
+  await upsertPublicArticleIndex(article, previousSlug === article.slug ? undefined : previousSlug)
+  invalidatePublicArticleCache(
+    previousSlug === article.slug ? article.slug : [previousSlug, article.slug]
+  )
   const audit = createAdminAuditTrail(existing || undefined, article, [
     { key: 'title', label: '标题' },
     { key: 'slug', label: '文件名' },

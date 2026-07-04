@@ -9,6 +9,8 @@ export default defineEventHandler(async (event) => {
   }
 
   await deleteArticle(slug)
+  await removePublicArticleFromIndex(slug)
+  invalidatePublicArticleCache(slug)
   await deleteArticleAutosave(slug)
   const audit = createAdminAuditTrail(existing || undefined, undefined, [
     { key: 'title', label: '标题' },

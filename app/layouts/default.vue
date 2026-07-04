@@ -33,8 +33,7 @@ const { isActiveNavigation } = useActiveNavigation()
 const searchOpen = ref(false)
 
 const { data: siteSearchArticles } = await useAsyncData('site-search-articles', () =>
-  queryCollection('blog')
-    .all(),
+  $fetch('/api/blog?search=1'),
   {
     default: () => []
   }

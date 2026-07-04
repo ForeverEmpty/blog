@@ -2,9 +2,7 @@
 const appConfig = useAppConfig();
 
 const { data: articles } = await useAsyncData("archive-list", () =>
-  queryCollection("blog")
-    .order("date", "DESC")
-    .all(),
+  $fetch("/api/blog"),
   {
     default: () => [],
   },

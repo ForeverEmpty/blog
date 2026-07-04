@@ -15,6 +15,9 @@ node_modules
 /logs
 *.log
 
+# Runtime generated indexes
+data/public-articles-index.json
+
 # Misc
 .DS_Store
 .fleet

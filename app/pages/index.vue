@@ -24,8 +24,7 @@ const { data: dailyQuote } = await useAsyncData("daily-quote", getDailyQuote, {
 });
 
 const { data: articles } = await useAsyncData("home-blog-list", () =>
-  queryCollection("blog")
-    .all(),
+  $fetch("/api/blog"),
   {
     default: () => [],
   },

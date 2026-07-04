@@ -8,15 +8,14 @@ const articleViewsDataKey = computed(() => `blog-article-views:${slug.value}`);
 
 const { data: article, pending: articlePending, error: articleError } = await useAsyncData(
   articleDataKey,
-  () => queryCollection("blog").path(articlePath.value).first(),
+  () => $fetch(`/api/blog/${encodeURIComponent(slug.value)}`),
   {
     default: () => null,
     watch: [articlePath],
   },
 );
 const { data: articleSiblings } = useLazyAsyncData("blog-siblings", () =>
-  queryCollection("blog")
-    .all(),
+  $fetch("/api/blog"),
   {
     default: () => [],
     deep: false,

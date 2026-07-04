@@ -36,10 +36,5 @@
     "@types/pg": "^8.20.0",
     "tailwindcss": "^4.3.0",
     "vue-tsc": "^3.3.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
   }
 }

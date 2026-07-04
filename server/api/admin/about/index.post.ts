@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const existing = await readAboutPage()
   const about = await saveAboutPage(body)
+  invalidatePublicAboutCache()
   const audit = createAdminAuditTrail(existing, about, [
     { key: 'title', label: '标题' },
     { key: 'description', label: '摘要' },

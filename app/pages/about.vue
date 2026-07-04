@@ -2,7 +2,7 @@
 const appConfig = useAppConfig();
 
 const { data: page } = await useAsyncData("about-page", () =>
-  queryCollection("pages").path("/about").first(),
+  $fetch("/api/about"),
 );
 
 if (!page.value) {
